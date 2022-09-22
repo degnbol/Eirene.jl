@@ -299,20 +299,6 @@ function getcyclesize(D::Dict, cyclenumber; dim=1)
 end
 
 
-function chainboundary(C; chain=zeros(Int,0), dim=1)
-    m = length(chain)
-    if m == 0
-        return zeros(Int, 0)
-    end
-    crv = convert(Array{Int,1},1:m);
-    ccp = [1,m+1]
-    brv,bcp = boundarymatrix(C,dim=dim,cols=chain)
-    brv,bcp = spmmF2(brv,bcp,crv,ccp,empteval(maximum,brv,0))
-    return brv
-end
-
-numcols(cp) = length(cp) - 1
-
 function complexrank(C; dim=1)
     sd = dim+1
     if dim > C["input"]["maxdim"]+1 || dim < 0
@@ -326,20 +312,12 @@ end
 
 function boundaryrank(C; dim=1)
     sd = dim+1;
-    if complexrank(C,dim=dim) == 0
-        return 0
-    else
-        return length(C["plo"][sd])
-    end
+    complexrank(C, dim=dim) == 0 ? 0 : length(C["plo"][sd])
 end
 
-function boundarycorank(C;dim=1)
+function boundarycorank(C; dim=1)
     sd = dim+1;
-    if complexrank(C,dim=dim) == 0
-        return 0
-    else
-        return complexrank(C,dim=dim)-boundaryrank(C,dim=dim)
-    end
+    complexrank(C, dim=dim) == 0 ? 0 : complexrank(C, dim=dim)-boundaryrank(C, dim=dim)
 end
 
 empteval(f, a, c) = isempty(a) ? c : f(a)

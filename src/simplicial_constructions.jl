@@ -291,20 +291,6 @@ function ff2complex(farfaces,firstv;maxsd = length(farfaces))
     return Nrv,Ncp
 end
 
-function eirened2complex(C)
-    if in(C["input"]["model"],["pc","vr"])
-        rv,cp = boundarymatrices(C)
-        fv = ocff2of(C["grain"],C["ocg2rad"])
-    elseif in(C["input"]["model"],["complex"])
-        rv = C["rv"]
-        cp = C["cp"]
-    else
-        println("Error: the value of C[\"input\"][\"model\"] must be \"pc\", \"vr\", or \"complex\".")
-    end
-    fv = ocff2of(C["grain"],C["ocg2rad"])
-    return rv,cp,fv
-end
-
 
 function ff2aflight_sc2(farfaces,firstv,columns)
     sd = 2
@@ -505,7 +491,7 @@ function filteredmatrixfromfarfaces(
     if sd > 1
         npfilt = grain[sd-1][nplows]
         nporder = integersinsameorder(npfilt)
-        addinteger!(nporder,numppair)
+        nporder .+= numppair
     else
         npfilt = zeros(Int,0)
         nporder =	zeros(Int,0)
@@ -518,25 +504,6 @@ function filteredmatrixfromfarfaces(
     lowlab[nporder]=nplows
     higlab = vcat(pphigs,nphigs)
 
-    if verbose
-        comparisonsuppvec = trues(numhigs)
-        comparisonsuppvec[hphs]=false
-        comparisonvec=findall(comparisonsuppvec)
-        differencecounter = 0
-        for i = 1:length(higsinpointorder)
-            if higsinpointorder[i]!=comparisonvec[i]
-                differencecounter+=1
-            end
-        end
-        if differencecounter>0
-            print(["hi ho comparison vec" differencecounter])
-            print(length(higsinpointorder))
-            print(length(comparisonvec))
-            print(comparisonvec[1:20])
-            print(higsinpointorder[1:20])
-            sleep(5)
-        end
-    end
     ppsupp = falses(numhigs)
     ppsupp[pphigs].=true
     ppmarker = 0
@@ -551,17 +518,10 @@ function filteredmatrixfromfarfaces(
             higtranslator[i]=nppmarker
         end
     end
-    allfaces = buildallfromfar(farfaces,firstv,sd,higsinpointorder;verbose = verbose)
-    if verbose
-        print("done building allfromfar")
-    end
-    Mrv,Mcp,Mm = presparsefull2unsortedsparsetranspose(allfaces,lowtranslator,higtranslator;verbose=verbose)
+    allfaces = buildallfromfar(farfaces,firstv,sd,higsinpointorder)
+    Mrv,Mcp,Mm = presparsefull2unsortedsparsetranspose(allfaces,lowtranslator,higtranslator)
     higtranslator = [];npfilt = [];ppsupp = [];allfaces = []
     #gc()
-    if verbose && length(Mrv)>(Mcp[end]-1)
-        print("There was the thought that Mrv should have no extra elements")
-        sleep(3)
-    end
     return Mrv,Mcp,lowlab,higlab,Mm
 end
 
