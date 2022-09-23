@@ -1,46 +1,33 @@
 #!/usr/bin/env julia
 
-function buildcomplex3(symmat::Array{Tv},maxsd; dictionaryoutput = true) where Tv
+function buildcomplex3(symmat::Matrix{Int}, maxsd::Int)
     grain = Array{Array{Int,1}}(undef,maxsd+1)
     farfaces = Array{Array{Int,1}}(undef,maxsd+1)
     prepairs = Array{Array{Int,1}}(undef,maxsd+1)
     firstv = Array{Array{Int,1}}(undef,maxsd+1)
-
-    farfaces[maxsd+1] = Array{Int}(undef,0)
-    firstv[maxsd+1] = ones(Int,1)
+    
     grain[maxsd+1] = Array{Int}(undef,0)
+    farfaces[maxsd+1] = Array{Int}(undef,0)
     prepairs[maxsd+1] = Array{Int}(undef,0)
+    firstv[maxsd+1] = [1]
 
     m = size(symmat,1)
-    w = offdiagmean(symmat,defaultvalue=0) |> vec
+    w = offdiagmean(symmat) |> vec
 
     vperm = sortperm(-w, alg=MergeSort)
     symmat = symmat[vperm,vperm]
 
-    farfaces[1] = convert(Array,1:m)
-    firstv[1] = convert(Array,1:(m+1))
+    farfaces[1] = 1:m
+    firstv[1] = 1:m+1
     grain[1] = diag(symmat)
     prepairs[1] = Array{Int}(undef,0)
 
-    r,c,z = generate2faces(symmat)
-    farfaces[2] = r
-    firstv[2] = c
-    grain[2] = z
+    farfaces[2], firstv[2], grain[2] = generate2faces(symmat)
     prepairs[2] = Array{Int}(undef,0)
 
     if maxsd == 3
-        generate3faces!(farfaces,firstv,grain,prepairs,m,symmat)
-        if dictionaryoutput == true
-            return Dict{String,Any}(
-                                 "farfaces" => farfaces,
-                                 "firstv" => firstv,
-                                 "grain" => grain,
-                                 "prepairs" => prepairs,
-                                 "symmat" => symmat,
-                                 "nvl2ovl"=>vperm)
-        else
-            return farfaces, firstv, grain, prepairs, symmat, vperm
-        end
+        generate3faces!(farfaces, firstv, grain, prepairs, m, symmat)
+        return (farfaces=farfaces, firstv=firstv, grain=grain, prepairs=prepairs, symmat=symmat, nvl2ovl=vperm)
     end
 
     fpi = Array{Int}(undef,0)
@@ -59,12 +46,12 @@ function buildcomplex3(symmat::Array{Tv},maxsd; dictionaryoutput = true) where T
         jrv = farfaces[sd-1]
         jcp = firstv[sd-1]
         jz = grain[sd-1]
-        zll= grain[sd-2]
+        zll = grain[sd-2]
         izfull = Array{Int}(undef,nll)
         r = Array{Int}(undef,startlength)
         z = Array{Int}(undef,startlength)
         c = Array{Int}(undef,m+1)
-        c[1]=1
+        c[1] = 1
         numpairs = [0]
         facecount = [0]
         if sd == maxsd-1
@@ -118,86 +105,79 @@ function buildcomplex3(symmat::Array{Tv},maxsd; dictionaryoutput = true) where T
                 dij = symmat[j,i]
                 dij == 0 && continue
                 if sd < maxsd-1
-                    process_sd_lt_maxsd!(
-                                         i::Int,j::Int,dij::Int,stepsize::Int,
-                                         facecount::Array{Int,1},numpairs::Array{Int,1},
-                                         jrv::Array{Int,1},jcp::Array{Int,1},jz::Array{Int,1},
-                                         r::Array{Int,1},z::Array{Int,1},pflist::Array{Int,1},
-                                         izfull::Array{Int,1},ff2pv::Array{Int,1},pmhist::Array{Int,2},
-                                        npsupp::BitArray{1})
+                    process_sd_lt_maxsd!(i,j,dij,stepsize,
+                                         facecount,numpairs,
+                                         jrv,jcp,jz,
+                                         r,z,pflist,
+                                         izfull,ff2pv,pmhist,
+                                         npsupp)
                 elseif sd == maxsd-1
-                    process_sd_onelt_maxsd_1!(
-                                              i::Int,j::Int,dij::Int,stepsize::Int,
-                                              facecount::Array{Int,1},numpairs::Array{Int,1},
-                                              jrv::Array{Int,1},jcp::Array{Int,1},jz::Array{Int,1},
-                                              r::Array{Int,1},z::Array{Int,1},pflist::Array{Int,1},
-                                              izfull::Array{Int,1},ff2pv::Array{Int,1},pmhist::Array{Int,2},
-                                             npsupp::BitArray{1})
+                    process_sd_onelt_maxsd_1!(i,j,dij,stepsize,
+                                              facecount,numpairs,
+                                              jrv,jcp,jz,
+                                              r,z,pflist,
+                                              izfull,ff2pv,pmhist,
+                                              npsupp)
                 else
                     for l = 1:(i-1)
                         oldclaw[l] = minimum(symmat[l,[i,j]])
                     end
-                    process_maxsd_one2i!(
-                                         i::Int,j::Int,dij::Int,stepsize::Int,
-                                         facecount::Array{Int,1},numpairs::Array{Int,1},
-                                         jrv::Array{Int,1},jcp::Array{Int,1},jz::Array{Int,1},
-                                         r::Array{Int,1},z::Array{Int,1},pflist::Array{Int,1},
-                                         oldclaw::Array{Int,1},zll::Array{Int,1},colsum::Array{Int,1},
-                                         rt::Array{Int,1},ct::Array{Int,1},zt::Array{Int,1},
-                                         izfull::Array{Int,1},ff2pv::Array{Int,1},
-                                         pmhist::Array{Int,2},fpi::Array{Int,2},
-                                        npsupp::BitArray{1})
+                    process_maxsd_one2i!(i,j,dij,stepsize,
+                                         facecount,numpairs,
+                                         jrv,jcp,jz,
+                                         r,z,pflist,
+                                         oldclaw,zll,colsum,
+                                         rt,ct,zt,
+                                         izfull,ff2pv,
+                                         pmhist,fpi,
+                                         npsupp)
 
-                    process_maxsd_i2i!(
-                                       i::Int,j::Int,dij::Int,stepsize::Int,
-                                       facecount::Array{Int,1},numpairs::Array{Int,1},
-                                       jrv::Array{Int,1},jcp::Array{Int,1},jz::Array{Int,1},
-                                       r::Array{Int,1},z::Array{Int,1},pflist::Array{Int,1},
-                                       oldclaw::Array{Int,1},zll::Array{Int,1},colsum::Array{Int,1},
-                                       rt::Array{Int,1},ct::Array{Int,1},zt::Array{Int,1},
-                                       izfull::Array{Int,1},ff2pv::Array{Int,1},
-                                       pmhist::Array{Int,2},fpi::Array{Int,2},
-                                      npsupp::BitArray{1})
+                    process_maxsd_i2i!(i,j,dij,stepsize,
+                                       facecount,numpairs,
+                                       jrv,jcp,jz,
+                                       r,z,pflist,
+                                       oldclaw,zll,colsum,
+                                       rt,ct,zt,
+                                       izfull,ff2pv,
+                                       pmhist,fpi,
+                                       npsupp)
 
-                    process_maxsd_i2j!(
-                                       i::Int,j::Int,dij::Int,stepsize::Int,
-                                       facecount::Array{Int,1},numpairs::Array{Int,1},
-                                       jrv::Array{Int,1},jcp::Array{Int,1},jz::Array{Int,1},
-                                       r::Array{Int,1},z::Array{Int,1},pflist::Array{Int,1},
-                                       oldclaw::Array{Int,1},zll::Array{Int,1},colsum::Array{Int,1},
-                                       rt::Array{Int,1},ct::Array{Int,1},zt::Array{Int,1},
-                                       izfull::Array{Int,1},ff2pv::Array{Int,1},
-                                       pmhist::Array{Int,2},fpi::Array{Int,2},
-                                      npsupp::BitArray{1})
+                    process_maxsd_i2j!(i,j,dij,stepsize,
+                                       facecount,numpairs,
+                                       jrv,jcp,jz,
+                                       r,z,pflist,
+                                       oldclaw,zll,colsum,
+                                       rt,ct,zt,
+                                       izfull,ff2pv,
+                                       pmhist,fpi,
+                                       npsupp)
 
-                    process_maxsd_j2j!(
-                                       i::Int,j::Int,dij::Int,stepsize::Int,
-                                       facecount::Array{Int,1},numpairs::Array{Int,1},
-                                       jrv::Array{Int,1},jcp::Array{Int,1},jz::Array{Int,1},
-                                       r::Array{Int,1},z::Array{Int,1},pflist::Array{Int,1},
-                                       oldclaw::Array{Int,1},zll::Array{Int,1},colsum::Array{Int,1},
-                                       rt::Array{Int,1},ct::Array{Int,1},zt::Array{Int,1},
-                                       izfull::Array{Int,1},ff2pv::Array{Int,1},
-                                       pmhist::Array{Int,2},fpi::Array{Int,2},
-                                      npsupp::BitArray{1})
+                    process_maxsd_j2j!(i,j,dij,stepsize,
+                                       facecount,numpairs,
+                                       jrv,jcp,jz,
+                                       r,z,pflist,
+                                       oldclaw,zll,colsum,
+                                       rt,ct,zt,
+                                       izfull,ff2pv,
+                                       pmhist,fpi,
+                                       npsupp)
 
-                    process_maxsd_j2end!(
-                                         i::Int,j::Int,dij::Int,stepsize::Int,
-                                         facecount::Array{Int,1},numpairs::Array{Int,1},
-                                         jrv::Array{Int,1},jcp::Array{Int,1},jz::Array{Int,1},
-                                         r::Array{Int,1},z::Array{Int,1},pflist::Array{Int,1},
-                                         oldclaw::Array{Int,1},zll::Array{Int,1},colsum::Array{Int,1},
-                                         rt::Array{Int,1},ct::Array{Int,1},zt::Array{Int,1},
-                                         izfull::Array{Int,1},ff2pv::Array{Int,1},
-                                         pmhist::Array{Int,2},fpi::Array{Int,2},
-                                        npsupp::BitArray{1})
+                    process_maxsd_j2end!(i,j,dij,stepsize,
+                                         facecount,numpairs,
+                                         jrv,jcp,jz,
+                                         r,z,pflist,
+                                         oldclaw,zll,colsum,
+                                         rt,ct,zt,
+                                         izfull,ff2pv,
+                                         pmhist,fpi,
+                                         npsupp)
                 end
             end
             # update the column pattern and the total number of nonzeros
             # encountered per codim2 face
             c[i+1] = facecount[1]+1
             if sd == maxsd
-                colsum[jrv[cran(jcp,i)]].+=1
+                colsum[jrv[cran(jcp,i)]] .+= 1
             end
         end
         delrange = c[end]:length(r)
@@ -222,18 +202,7 @@ function buildcomplex3(symmat::Array{Tv},maxsd; dictionaryoutput = true) where T
         end
     end
     #gc()
-    if dictionaryoutput == true
-        D = Dict{String,Any}(
-                             "farfaces" => farfaces,
-                             "firstv" => firstv,
-                             "grain" => grain,
-                             "prepairs" => prepairs,
-                             "symmat" => symmat,
-                             "nvl2ovl"=> vperm)
-        return D
-    else
-        return farfaces,firstv,grain,prepairs,symmat,vperm
-    end
+    (farfaces=farfaces, firstv=firstv, grain=grain, prepairs=prepairs, symmat=symmat, nvl2ovl=vperm)
 end
 
 function process_sd_lt_maxsd!(
@@ -290,17 +259,16 @@ function process_maxsd_one2i!(
         if fpi[l,j]<fpi[l+1,j]
             ocl = oldclaw[l]
             if ocl < dij
-                process_maxsd_one2i_subroutine!(
-                                                i::Int,j::Int,dij::Int,stepsize::Int,
-                                                facecount::Array{Int,1},numpairs::Array{Int,1},
-                                                jrv::Array{Int,1},jcp::Array{Int,1},jz::Array{Int,1},
-                                                r::Array{Int,1},z::Array{Int,1},pflist::Array{Int,1},
-                                                oldclaw::Array{Int,1},zll::Array{Int,1},colsum::Array{Int,1},
-                                               rt::Array{Int,1},ct::Array{Int,1},zt::Array{Int,1},
-                                               izfull::Array{Int,1},ff2pv::Array{Int,1},
-                                               pmhist::Array{Int,2},fpi::Array{Int,2},
-                                               npsupp::BitArray{1},
-                                              l::Int,ocl::Int)
+                process_maxsd_one2i_subroutine!(i,j,dij,stepsize,
+                                                facecount,numpairs,
+                                                jrv,jcp,jz,
+                                                r,z,pflist,
+                                                oldclaw,zll,colsum,
+                                               rt,ct,zt,
+                                               izfull,ff2pv,
+                                               pmhist,fpi,
+                                               npsupp,
+                                              l,ocl)
             end
         end
     end
@@ -447,16 +415,16 @@ function process_maxsd_j2end!(
 end
 
 function pairupdate!(k::Int,facecount::Array{Int,1},pflist::Array{Int,1},numpairs::Array{Int,1},npsupp::BitArray{1},iterateNumber)
-    numpairs[1]+=1
+    numpairs[1] += 1
     pflist[numpairs[1]] = facecount[1]
-    npsupp[k]=false
+    npsupp[k] = false
 end
 
 function pairupdatedeluxe!(k::Int,i::Int,j::Int,numpairs::Array{Int,1},facecount::Array{Int,1},pflist::Array{Int,1},ff2pv::Array{Int,1},npsupp::BitArray{1},pmhist::Array{Int,2})
-    numpairs[1]+=1
-    pmhist[i,j]+=1
-    npsupp[k]=false
-    pflist[numpairs[1]]=facecount[1]
+    numpairs[1] += 1
+    pmhist[i,j] += 1
+    npsupp[k] = false
+    pflist[numpairs[1]] = facecount[1]
     ff2pv[k] = i
 end
 
@@ -483,14 +451,12 @@ function faceupdatedeluxe!(facecount::Array{Int,1},r::Array{Int,1},z::Array{Int,
 end
 
 function saveface(ct::Array{Int,1},kk::Int,colsum::Array{Int,1},farfilt::Int,oldclaw::Array{Int,1},rt::Array{Int,1},zt::Array{Int,1})
-    keep = true
     for l = ct[kk]:colsum[kk]
         if  zt[l]>= farfilt && oldclaw[rt[l]]>=farfilt
-            keep = false
-            break
+            return false
         end
     end
-    return keep
+    true
 end
 
 function processfpi!(pmhist::Array{Int,2},fpi::Array{Int,2},jcp::Array{Int,1},jrv::Array{Int,1},ff2pv::Array{Int,1},m::Integer)
@@ -565,7 +531,7 @@ function generate3faces!(farfaces_cell, firstv_cell, grain_cell, prepairs_cell, 
         firstv_hs[face+1] += 1
     end
     firstv_hs[1] = 1
-    for i = 2:(m+1)
+    for i = 2:m+1
         firstv_hs[i] = firstv_hs[i-1]+firstv_hs[i]
     end
 
@@ -579,27 +545,28 @@ function generate3faces!(farfaces_cell, firstv_cell, grain_cell, prepairs_cell, 
     ncheckedges = trues(numedges)
 
     for a = 1:m
-        adist[:].=0
+        adist .= 0
         adist[crows(firstv,farfaces,a)] = crows(firstv,grain,a)
         for ip = cran(firstv,a)
             i = farfaces[ip]
             dai = grain[ip]
-            idist[:].=0
+            idist .= 0
             idist[crows(firstv,farfaces,i)]	= crows(firstv,grain,i)
             idist[crows(firstv_hs,closefaces_higsorted,i)] = crows(firstv_hs,grain_higsorted,i)
             for jp = cran(firstv,i)
                 if ncheckedges[jp]
                     j = farfaces[jp]
                     dij = grain[jp]
-                    if dij <= dai && dij <= adist[j] # note this condition bakes in the req. that j be adjacent to a
-                        numpairs+=1
+                    # note this condition bakes in the req. that j be adjacent to a
+                    if dij <= dai && dij <= adist[j]
+                        numpairs += 1
                         ncheckedges[jp] = false
                         clawvec[1:i] .= 0
                         for lp = cran(firstv_hs,j)
                             l = closefaces_higsorted[lp]
                             if l >= i
                                 break
-                            elseif idist[l]!=0
+                            elseif idist[l] != 0
                                 clawvec[l] = min(idist[l],grain_higsorted[lp])
                             end
                         end
@@ -608,7 +575,8 @@ function generate3faces!(farfaces_cell, firstv_cell, grain_cell, prepairs_cell, 
                             djk = grain[kp]
                             dak = adist[k]
                             dik = idist[k]
-                            if dak < dij && dak<djk && dak<dik	# this bakes in req. that dik>0
+                            # this bakes in req. that dik > 0
+                            if dak < dij && dak<djk && dak < dik
                                 dijk = min(dij,dik,djk)
                                 keepface = true
                                 for bp = cran(firstv_hs,k)

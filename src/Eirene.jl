@@ -30,19 +30,13 @@ __precompile__()
 module Eirene
 
 using Distances
-using FileIO
-using MultivariateStats
-using SparseArrays
+# using MultivariateStats
+# using SparseArrays
 using LinearAlgebra
-using Dates
-using Statistics
-using DelimitedFiles
-using CSV
-using Hungarian # Wasserstein distances
+using Statistics: mean
 
 export eirene, barcode, classrep
 
-include("wasserstein_distances.jl")
 include("simplicial_constructions.jl")
 include("schur_complements.jl")
 include("inversion.jl")
@@ -58,9 +52,10 @@ include("index_utils.jl")
 """
 Computes the persistent homology of a filtered complex.
 """
-function eirene(d::Matrix{Float64}, maxdim; minrad=-Inf, maxrad=Inf, numrad=Inf, nodrad=[])
-    numpoints = size(d, 1)
-    @assert issymmetric(d)
+function eirene(pointcloud::Matrix{Float64}, maxdim::Int; minrad=-Inf, maxrad=Inf, numrad=Inf, nodrad=[])
+    @assert size(pointcloud,2) == 3 "points in R3 expected, with points along the first dimension."
+    numpoints = size(pointcloud,1)
+    d = pairwise(Euclidean(), pointcloud, dims=1)
     
     maxrad = min(maxrad, minimum(maximum(d,dims=1)))
     
@@ -70,7 +65,7 @@ function eirene(d::Matrix{Float64}, maxdim; minrad=-Inf, maxrad=Inf, numrad=Inf,
     # <trueordercanonicalform> is a bit like <integersinsameorder>, 
     # just valid for floating point inputs, and with a bit more data in the 
     # output
-    t, ocg2rad = trueordercanonicalform(d, factor=true)
+    t, ocg2rad = trueordercanonicalform(d)
 
     t = (1 + maximum(t)) .- t
     ocg2rad = reverse(ocg2rad, dims=1)
@@ -86,124 +81,29 @@ function eirene(d::Matrix{Float64}, maxdim; minrad=-Inf, maxrad=Inf, numrad=Inf,
     t = t[vertices2keep, vertices2keep]
 
     #### Build the complex
-    D = buildcomplex3(t, maxdim+2)
-    D["ocg2rad"] = ocg2rad
-
-    #### Compute persistence
-    persistf2!(D)
-
+    C = buildcomplex3(t, maxdim+2)
     # this covers the case where some vertices never enter the filtration
-    D["nvl2ovl"] = vertices2keep[D["nvl2ovl"]]
-
-    #### Store generators
-    #gc()
-    unpack!(D)
-    #gc()
-    return D
-end
-
-function offdiagmin(d::Array{Tv}) where Tv
-    if size(d,1) != size(d,2)
-        println("error: d should be square")
-        return
-    end
-    v = zeros(Tv,size(d,2))
-    for p = 1:size(d,2)
-        val1 = empteval(minimum,d[1:p-1,p],Inf)
-        val2 = empteval(minimum,d[p+1:end,p],Inf)
-        v[p] = min(val1,val2)
-    end
-    return v
-end
-
-function ceil2grid(M; origin=0, stepsize=1, numsteps=Inf)
-    if stepsize <  0
-        println("error in function <roundentries>: stepsize must be positive")
-        return
-    end
-    if numsteps <  1
-        println("error in function <roundentries>: numsteps must be positive")
-        return
-    end
-
-    N = copy(M)
-    N = Array{Float64}(N) # conversion
-    N = (N .- origin)./stepsize
-    N = ceil.(N)
-    N = N.*stepsize.+origin
-
-    N[N .< origin] .= -Inf
-    if numsteps < Inf
-        maxval = origin + numsteps * stepsize
-        N[N .> maxval] .= Inf
-    end
-    N
-end
-
-
-function classrep(D::Dict; dim=1, class=1, format="vertex x simplex")
-    if any(class .> nnzbars(D, dim=dim))
-        error("The value for keyword argument <class> has an integer greater than the number of nonzero bars in the specified dimension")
-    elseif !(0 <= dim <= D["input"]["maxdim"])
-        error("Barcodes were not computed in the specified dimension")
-    end
-    if !haskey(D, "farfaces")
-        format = "index"
-    end
+    nvl2ovl = vertices2keep[C.nvl2ovl]
     
-    if format == "vertex x simplex"
-        return classrep_faces(D, dim=dim, class=class)
-    elseif format == "vertex"
-        return classrep_vertices(D, dim=dim, class=class)
-    elseif format == "index"
-        return classrep_cells(D, dim=dim, class=class)
-    end
+    #### Compute persistence
+    P = persistf2(C.farfaces, C.firstv, C.prepairs, C.grain)
+    
+    #### Store generators
+    R = unpack!(C.grain, C.farfaces, C.firstv, P.trv, P.tcp, P.plo, P.phi, P.tid, maxdim+2)
+    
+    barcodes = [barcode(maxdim, C.grain, P.plo, P.phi, P.tid, ocg2rad; dim=dim) for dim in 1:maxdim]
+    representatives = [[classrep(maxdim, C.farfaces, C.firstv, R.cyclerep, nvl2ovl, C.grain, P.plo, P.phi, P.tid; class=i, dim=dim) for i in 1:size(barcodes[dim],1)] for dim in 1:maxdim]
+    return barcodes, representatives
 end
 
-function classrep_cells(D::Dict; dim=1, class=1)
+function barcode(maxdim::Int, grain, plo, phi, tid, ocg2rad; dim::Int=1)
+    @assert dim <= maxdim
     sd = dim+2
-    if haskey(D, "cyclerep")
-        return D["cyclerep"][sd][class]
-    else
-        cyclename = barname2cyclename(D,class;dim=dim)
-        return getcycle(D,sd,class)
-    end
-end
-
-function classrep_faces(D::Dict; dim=1, class=1)
-    sd = dim+2
-    rep = classrep_cells(D, dim=dim, class=class)
-    vrealization = vertexrealization(D, sd-1, rep)
-    D["nvl2ovl"][vrealization]
-end
-
-function classrep_vertices(D::Dict; dim=1, class=1)
-    sd = dim+2
-    rep = classrep_cells(D, dim=dim, class=class)
-    vertices = incidentverts(D, sd-1, rep)
-    D["nvl2ovl"][vertices]
-end
-
-function barcode(D::Dict; dim=1, ocf=false)
-    if haskey(D,:perseusjlversion)
-        return barcode_perseus(D,dim=dim)
-    elseif haskey(D,:barcodes)
-        return D[:barcodes][dim+1]
-    elseif !haskey(D,"cp") & !haskey(D,"farfaces")
-        print("unrecognized object:")
-        display(D)
-        return
-    elseif dim > D["input"]["maxdim"]
-        maxdim = D["input"]["maxdim"]
-        println("error: barcodes were not computed in dimensions greater than $(maxdim).")
-        return
-    end
-    sd = dim+2
-    plo = D["plo"][sd]
-    phi = D["phi"][sd]
-    tid = D["tid"][sd]
-    lg = D["grain"][sd-1]
-    hg  = D["grain"][sd]
+    plo = plo[sd]
+    phi = phi[sd]
+    tid = tid[sd]
+    lg = grain[sd-1]
+    hg = grain[sd]
     
     mortalprimagrain = lg[plo]
     mortalultragrain = hg[phi]
@@ -217,7 +117,7 @@ function barcode(D::Dict; dim=1, ocf=false)
     
     mortalran = 1:numfin
     evergrran = numfin+1:numfin+numinf
-    finran = 1:(2*numfin+numinf)
+    finran = 1:2*numfin+numinf
     # stands for finite range; these are the linear
     # indices of the barcode array that take finite
     # values
@@ -230,30 +130,39 @@ function barcode(D::Dict; dim=1, ocf=false)
     bc[mortalran,2] .= mortalultragrain
     bc[evergrran,1] = lg[tid[evrgrbran]]
     
-    if !ocf
-        bcc = copy(bc)
-        bc = Array{Float64}(bc)
-        bc[finran] = D["ocg2rad"][bcc[finran]]
-        bc[evergrran,2]    .= Inf
-    else
-        bc = length(D["ocg2rad"]).-bc
-    end
+    bcc = copy(bc)
+    bc = Array{Float64}(bc)
+    bc[finran] = ocg2rad[bcc[finran]]
+    bc[evergrran,2] .= Inf
     
     bc
 end
 
+function classrep(maxdim::Int, farfaces, firstv, cyclerep, nvl2ovl, grain, plo, phi, tid; dim::Int=1, class::Int=1)
+    @assert !any(class .> nnzbars(grain, plo, phi, tid, dim=dim)) "The value for keyword argument <class> has an integer greater than the number of nonzero bars in the specified dimension"
+    @assert 0 <= dim <= maxdim "Barcodes were not computed in the specified dimension"
+    classrep_faces(farfaces, firstv, cyclerep, nvl2ovl; dim=dim, class=class)
+end
 
-function binom(x, y)
-    k = 1;
-    for i = x:-1:(x-y+1)
-        k = i*k
-    end
-    for i = 2:y
-        k = k/i
-    end
-    k = convert(Int, k)
-    return k
+function classrep_faces(farfaces, firstv, cyclerep, nvl2ovl; dim::Int=1, class::Int=1)
+    sd = dim+2
+    vrealization = vertexrealization(farfaces, firstv, sd-1, cyclerep[sd][class])
+    nvl2ovl[vrealization]
 end
 
 
+# run an example to precompile typed versions of each function called
+eirene(rand(100, 3), 2; minrad=0)
+
 end;
+
+
+using CSV, DataFrames
+
+fnames = readdir(expanduser("~/protTDA/data/GASS/xyzChain"); join=true)
+dfs = CSV.read.(fnames, DataFrame)
+
+xyzs = [Matrix(df[!, [:x, :y, :z]]) for df in dfs]
+
+@time Eirene.eirene.(xyzs, 2; minrad=0., maxrad=1.);
+

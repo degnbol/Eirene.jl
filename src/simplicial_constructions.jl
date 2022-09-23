@@ -6,9 +6,11 @@ function ocff2of(grain::Array{Array{Int,1},1}, ocg2rad::Array{Float64})
     [ocg2rad[g] for g in grain]
 end
 
-# NB: eirene permutes vertex labels prior to calculation;
-# all versions of <vertexrealization> must be interpreted with
-# respect to the PERMUTED labeling scheme
+"""
+NB: eirene permutes vertex labels prior to calculation;
+all versions of <vertexrealization> must be interpreted with
+respect to the PERMUTED labeling scheme
+"""
 function vertexrealization(farfaces, firstv, facecardinality::Int, facenames)
     numfaces = length(facenames)
     m = length(firstv[2]) - 1
@@ -40,33 +42,11 @@ function vertexrealization(farfaces, firstv, facecardinality::Int, facenames)
     return vrealization
 end
 
-# NB: eirene permutes vertex labels prior to calculation;
-# all versions of <vertexrealization> must be interpreted with
-# respect to the PERMUTED labeling scheme
-function vertexrealization(D::Dict, facecardinality::Int, facenames)
-    return vertexrealization(D["farfaces"], D["firstv"], facecardinality, facenames)
-end
-
-# NB: eirene permutes vertex labels prior to calculation;
-# all versions of <vertexrealization> must be interpreted with
-# respect to the PERMUTED labeling scheme
-function vertexrealization(D::Dict; dim::Int=1, class::Int=1)
-    sd = dim+2
-    facecard = dim+1
-
-    if haskey(D,"cyclerep")
-        rep = D["cyclerep"][sd][class]
-    else
-        cyclename = barname2cyclename(D,class; dim=dim)
-        rep = getcycle(D,sd,cyclename)
-    end
-
-    return vertexrealization(D::Dict, facecard, rep)
-end
-
-# NB: eirene permutes vertex labels prior to calculation;
-# the output of <incidentverts> must be interpreted with respect
-# to the PERMUTED labeling scheme
+"""
+NB: eirene permutes vertex labels prior to calculation;
+the output of <incidentverts> must be interpreted with respect
+to the PERMUTED labeling scheme
+"""
 function incidentverts(farfaces, firstv, facecardinality, facenames)
     numfaces::Int = length(facenames)
     m::Int = length(firstv[2]) - 1
@@ -97,26 +77,21 @@ function incidentverts(farfaces, firstv, facecardinality, facenames)
     return findall(vsupp)
 end
 
-# NB: eirene permutes vertex labels prior to calculation;
-# the output of <incidentverts> must be interpreted with respect
-# to the PERMUTED labeling scheme
-function incidentverts(D::Dict, facecardinality, facenames)
-    return incidentverts(D["farfaces"],D["firstv"],facecardinality,facenames)
-end
-
-# NB: eirene permutes vertex labels prior to calculation;
-# the output of <incidentverts> must be interpreted with respect
-# to the PERMUTED labeling scheme
+"""
+NB: eirene permutes vertex labels prior to calculation;
+the output of <incidentverts> must be interpreted with respect
+to the PERMUTED labeling scheme
+"""
 function incidentverts(D::Dict; dim::Int=1, class::Int=1)
     facecardinality = dim+1
 
     if haskey(D,"cyclerep")
         rep = D["cyclerep"][dim+2][class]
     else
-        cyclename = barname2cyclename(D,class;dim=dim)
-        rep = getcycle(D,facecardinality,class)
+        cyclename = barname2cyclename(grain, plo, phi, tid, class; dim=dim)
+        rep = getcycle(D, facecardinality, class)
     end
-    return incidentverts(D,facecardinality,rep)
+    return incidentverts(D, facecardinality, rep)
 end
 
 function buildclosefromclose(lrowval,lcolptr,lclosefaces,hrowval,hcolptr;facecard = size(lclosefaces,1)+1)
@@ -174,29 +149,6 @@ function buildallfromclose(lrowval,lcolptr,lclosefaces,hrowval,hcolptr,selectedc
         end
     end
     return hclosefaces
-end
-
-function buildclosefaces!(lrowval,lcolptr,lclosefaces,lfarfaces,hrowval,hcolptr,destinationmatrix)
-    m = length(hcolptr)-1
-    n = length(hrowval)
-    rowdepth = size(lclosefaces,1)
-    sd = rowdepth+1
-    rosettacol = Array{Int}(undef,maximum(lrowval))
-    for i = 1:m
-        rosettacol[lrowval[cran(lcolptr,i)]]=cran(lcolptr,i)
-        for j = cran(hcolptr,i)
-            farface = hrowval[j]
-            for k = 1:rowdepth
-                destinationmatrix[k,j]=rosettacol[lclosefaces[farface]]
-            end
-            destinationmatrix[sd,j] = rosettacol[lrowval[farface]]
-        end
-    end
-    for j = 1:n
-        for i = 1:sd
-            lclosefaces[i,j]=destinationmatrix[i,j]
-        end
-    end
 end
 
 function buildclosefromfar(farfaces,firstv,sd)
@@ -262,41 +214,10 @@ function buildallfromfar(farfaces,firstv,sd,columnsinorder)
     return lclosefaces
 end
 
-function ff2boundary(farfaces,firstv;sd=1)
-    rv = Array{Int}(undef,0)
-    cp = [1]
-    if sd == 1
-        rv = Array{Int}(undef,0)
-        cp = ones(Int,length(farfaces[1])+1)
-    else
-        n = length(farfaces[sd])
-        rv = ff2aflight(farfaces,firstv,sd,1:n)
-        rv = vec(rv)
-        cp = convert(Array{Int,1},sd+1:sd:(1+n*sd))
-        prepend!(cp,[1])
-    end
-    return rv,cp
-end
-
-function ff2complex(farfaces,firstv;maxsd = length(farfaces))
-    Nrv = fill(Array{Int}(undef,0),maxsd)
-    Ncp = fill(Array{Int}(undef,0),maxsd)
-    Nrv		= convert(Array{Array{Int,1}},Nrv)
-    Ncp		= convert(Array{Array{Int,1}},Ncp)
-    Nrv[1] = Array{Int}(undef,0)
-    Ncp[1]	= fill(1,length(farfaces[1])+1)
-    for sd = 2:maxsd
-        Nrv[sd],Ncp[sd] = ff2boundary(farfaces,firstv,sd=sd)
-    end
-    return Nrv,Ncp
-end
-
-
 function ff2aflight_sc2(farfaces,firstv,columns)
     sd = 2
-    if isempty(farfaces[sd])
-        return Array{Int}(undef,2,0)
-    end
+    isempty(farfaces[sd]) && return Array{Int}(undef,2,0)
+    
     f0faces::Array{Int,1} = farfaces[sd]
     colptr::Array{Int,1} = firstv[2]
     columnpost::Int   = 1
@@ -324,10 +245,7 @@ end
 
 function ff2aflight_sc3(farfaces,firstv,columns)
     sd = 3
-
-    if isempty(farfaces[sd])
-        return Array{Int}(undef,3,0)
-    end
+    isempty(farfaces[sd]) && return Array{Int}(undef,3,0)
 
     fcfaces::Array{Int,2} = buildclosefromfar(farfaces,firstv,sd-1,1:length(farfaces[2]))
 
@@ -406,24 +324,6 @@ function updatetranslator!(f0,firstv0,holdi,holdip1,t,firstv1,farfaces1)
     end
 end
 
-function ff2aflight_subr!(
-        columns::UnitRange{Int},f0faces::Array{Int,1},f1faces::Array{Int,1},f2faces::Array{Int,1},fcfaces::Array{Int,2},fvscm0::Array{Int,1},
-        fvscm1::Array{Int,1},fvscm2::Array{Int,1},holdi::Array{Int,1},holdip1::Array{Int,1},holdj::Array{Int,1},
-        holdjp1::Array{Int,1},t1::Array{Int,1},t2::Array{Int,1},faces::Array{Int,2},
-        scm0::Int,scm1::Int,scm2::Int)
-    for fp = 1:length(columns)
-        f0 = columns[fp]
-        f1 = f0faces[f0]
-        f2 = f1faces[f1]
-        updatetranslator!(f0::Int,fvscm0::Array{Int,1} ,holdi::Array{Int,1},holdip1::Array{Int,1},t1::Array{Int,1},fvscm1::Array{Int,1},f1faces::Array{Int,1})
-        updatetranslator!(f1::Int,fvscm1::Array{Int,1},holdj::Array{Int,1},holdjp1::Array{Int,1},t2::Array{Int,1},fvscm2::Array{Int,1},f2faces::Array{Int,1})
-        for i = 1:scm2
-            faces[i,fp] = t1[t2[fcfaces[i,f2]]]
-        end
-        faces[scm1,fp] = t1[f2]
-        faces[scm0,fp] = f1
-    end
-end
 
 function ff2aflight(farfaces, firstv, sd, columns)
     if sd == 1
@@ -443,8 +343,7 @@ function ff2aflight(D::Dict, sd, columns)
     return faces
 end
 
-#=
-
+"""
 NB
 - Input argument <grain> must be arranged least to greatest
 
@@ -459,16 +358,8 @@ ically.
 Sparse matrix representation of transpose(D[lowlab,higlab]), where D is
 submatrix of the total boundary operator indexed by cells of dimension sd-1
 (along the columns) and sd-2 (along the rows).
-
-=#
-function filteredmatrixfromfarfaces(
-        farfaces,
-        firstv,
-        prepairs,
-        grain,
-        sd::Integer,
-        lowbasisnames::Array{Int,1})
-
+"""
+function filteredmatrixfromfarfaces(farfaces, firstv, prepairs, grain, sd::Integer, lowbasisnames::Array{Int,1})
     numhigs = length(farfaces[sd])
     numlows = length(farfaces[sd-1])
     numppair= length(prepairs[sd])
@@ -525,33 +416,28 @@ function filteredmatrixfromfarfaces(
     return Mrv,Mcp,lowlab,higlab,Mm
 end
 
-function getmaxdim(farfaces)
-    l = length(farfaces)
-    maxdim = l
-    for i = 1:l
-        if length(farfaces[i]) == 0
-            maxdim = i
-            break
-        end
-    end
-    return maxdim
+function intervalcomplementuniqueunsortedinput(uniquepositiveintegers,intervalEndpoint)
+	v = uniquepositiveintegers
+	n = intervalEndpoint
+	L = length(v)
+	if L==0
+		return 1:n
+	elseif L==n
+		return Array{Int64}(undef,0)
+	else
+		complementsupport = trues(n)
+		complementsupport[v] .= false
+		complement = Array{Int64}(undef,n-L)
+		marker = 0
+		for i = 1:n
+			if complementsupport[i]
+				marker+=1
+				complement[marker]=i
+			end
+		end
+	end
+	return complement
 end
 
-function grain2maxsd(grain)
-    c = 0
-    for i = 1:length(grain)
-        if !isempty(grain[i])
-            c = i
-        end
-    end
-    return c
-end
 
-function skelcount(numvertices,maxsdinality)
-    c = 0
-    for i = 1:maxsdinality
-        c += binom(numvertices,i)
-    end
-    return c
-end
 

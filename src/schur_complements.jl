@@ -72,8 +72,7 @@ function schurit4!(	Mrv,Mcp,Mm,Mn,Mn0,
         Sprows,Spcols,numsenpairs,
         comprows,compcols,
         Trv,Tcp,Srv,Scp;
-        updatetransform = true,
-        diagonstic = false)
+        updatetransform::Bool=true)
 
     Mm0 = copy(Mm[1])
     Mm[1] = length(comprows)

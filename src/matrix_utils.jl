@@ -62,10 +62,7 @@ function minmaxceil!(S::Matrix{Float64}; minrad=minimum(N), maxrad=maximum(N), n
 end
 
 # ran should be an array in sorted order, with ran[end] >= maximum(A)
-function ceil2grid(A,ran)
-    if ran == "all"
-        return A
-    end
+function ceil2grid(A, ran)
     B = copy(A)
     for j = 1:length(A)
         post = 1
@@ -78,79 +75,46 @@ function ceil2grid(A,ran)
 end
 
 
-function offdiagmin(S, i)
-    if i == 1
-        return(minimum(S[2:end,i]))
-    elseif i == size(S,1)
-        return minimum(S[1:end-1,i])
-    else
-        return min(minimum(S[1:i-1,i]),minimum(S[i+1:end,i]))
-    end
-end
-
-
-
-function offdiagmean(S; defaultvalue=[])
+function offdiagmean(S::Matrix{Int}; default=0)
     m,n = size(S)
-    if m != n
-        println("error in <offdiagmean>: input matrix should be square")
-    end
-    if isempty(defaultvalue)
-        println("warning: no defaulvalue was set for <offdiagmin>; this parameter has been set to 0")
-        defaultvalue = 0
-    end
-    if m == 1
-        return defaultvalue
-    end
+    @assert m == n "offdiagmean: matrix arg should be square"
+    m != 1 || return default
     mu = zeros(m)
     for j = 1:m
         v = S[1:(j-1),j]
         u = S[(j+1):m,j]
-        mu[j]  = mean(vcat(v[:],u[:]))
+        mu[j] = mean(vcat(v[:],u[:]))
     end
     return mu
 end
 
-function trueordercanonicalform(M; rev=false, firstval=1, factor=false)
+function trueordercanonicalform(M::Matrix{Float64})
     m = length(M)
-    perm = sortperm(M[:], rev=rev, alg=MergeSort)
+    m > 0 || return zeros(Int,0), zeros(Int,0)
+    perm = sortperm(M[:], alg=MergeSort)
     oca = zeros(Int, size(M)...)
 
-    if m ==	0
-        return zeros(Int,0), zeros(Int,0)
-    end
-
-    if factor
-        numvals = 1
-        post = 1
-        for p = 1:m
-            if M[perm[p]] != M[perm[post]]
-                post = p
-                numvals += 1
-            end
+    numvals = 1
+    post = 1
+    for p = 1:m
+        if M[perm[p]] != M[perm[post]]
+            post = p
+            numvals += 1
         end
-        oca2rad = Array{Float64}(undef,numvals)
-        oca2rad[1] = M[perm[1]]
     end
+    oca2rad = Array{Float64}(undef,numvals)
+    oca2rad[1] = M[perm[1]]
 
-    post = [1]
-    k = [1]
-    trueordercanonicalform_subr!(M,perm,oca,oca2rad,post,k,m,factor)
-    if factor
-        return oca, oca2rad
-    else
-        return oca
-    end
+    trueordercanonicalform_subr!(M,perm,oca,oca2rad,[1],[1],m)
+    return oca, oca2rad
 end
 
-function trueordercanonicalform_subr!(M,perm,oca,oca2rad,post,k,m,factor)
+function trueordercanonicalform_subr!(M, perm, oca, oca2rad, post, k, m::Int)
     for p  = 1:m
         if M[perm[p]] != M[perm[post[1]]]
             post[1] = p
             k[1] =  k[1]+1
-            if factor
-                oca2rad[k[1]] = M[perm[post[1]]]
-            end
+            oca2rad[k[1]] = M[perm[post[1]]]
         end
         oca[perm[p]] = k[1]
     end

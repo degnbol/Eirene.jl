@@ -1,4 +1,5 @@
 #!/usr/bin/env julia
+using SparseArrays
 
 cran(A::SparseMatrixCSC, j) = A.colptr[j]:(A.colptr[j+1]-1)
 cran(colptr::Array, j::Int) = colptr[j]:(colptr[j+1]-1)
@@ -52,18 +53,18 @@ function findcol(cp, k)
     return i-1
 end
 
-function extend!(x::Array{Tv,1},n::Integer) where Tv
-    if length(x)<n
-        append!(x,Array{Tv}(undef,n-length(x)))
+function extend!(x::Array{Int,1},n::Int)
+    if length(x) < n
+        append!(x,Array{Int}(undef,n-length(x)))
     end
 end
 
-function copycolumnsubmatrix(Arv::Array{Tv,1},Acp,columnindices) where Tv<:Integer
+function copycolumnsubmatrix(Arv::Array{Int,1},Acp,columnindices)
     allocationspace = 0
     for j in columnindices
         allocationspace+= Acp[j+1]-Acp[j]
     end
-    Brv = Array{Tv}(undef,allocationspace)
+    Brv = Array{Int}(undef,allocationspace)
     Bcp = Array{Int}(undef,length(columnindices)+1)
     Bcp[1]=1
     for jp = 1:length(columnindices)
@@ -71,9 +72,8 @@ function copycolumnsubmatrix(Arv::Array{Tv,1},Acp,columnindices) where Tv<:Integ
         Bcp[jp+1] = Bcp[jp]+Acp[j+1]-Acp[j]
         Brv[Bcp[jp]:(Bcp[jp+1]-1)]=Arv[Acp[j]:(Acp[j+1]-1)]
     end
-    return Brv,Bcp
+    return Brv, Bcp
 end
-
 
 
 function extendcolumnlight!(rowval::Array{Ti,1},colptr::Array{Ti,1},v::Array{Ti},k::Ti,growthincrement::Ti) where Ti
@@ -84,11 +84,11 @@ function extendcolumnlight!(rowval::Array{Ti,1},colptr::Array{Ti,1},v::Array{Ti}
     if length(r)<c[k+1]-1
         append!(r,Array{Int}(undef,max(growthincrement,length(v))))
     end
-    r[startpoint:(c[k+1]-1)]=v
+    r[startpoint:(c[k+1]-1)] = v
 end
 
 # colsinorder must be in sorted order
-function supportedmatrix!(Mrowval::Array{Tv},Mcolptr::Array{Tv,1},rows1,colsinorder,Mm::Tv) where Tv<:Integer
+function supportedmatrix!(Mrowval::Array{Int},Mcolptr::Array{Int,1},rows1,colsinorder,Mm::Int)
     n = length(colsinorder)
     suppcol1 = falses(Mm)
     suppcol1[rows1].=true
@@ -134,10 +134,10 @@ function stackedsubmatrices(
             end
         end
     end
-    rv1 = Array{Tv}(undef,nz1)
-    rv2 = Array{Tv}(undef,nz2)
-    cp1 = Array{Tv}(undef,n+1); cp1[1]=1
-    cp2 = Array{Tv}(undef,n+1); cp2[1]=1
+    rv1 = Array{Int}(undef,nz1)
+    rv2 = Array{Int}(undef,nz2)
+    cp1 = Array{Int}(undef,n+1); cp1[1]=1
+    cp2 = Array{Int}(undef,n+1); cp2[1]=1
     nz1 = 0; nz2 = 0
     for jp = 1:n
         for ip in cran(Mcolptr,cols[jp])
