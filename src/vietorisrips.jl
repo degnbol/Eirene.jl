@@ -14,7 +14,7 @@ function buildcomplex3(symmat::Matrix{Int}, maxsd::Int)
     m = size(symmat,1)
     w = offdiagmean(symmat) |> vec
 
-    vperm = sortperm(-w, alg=MergeSort)
+    vperm = sortperm(w, rev=true, alg=MergeSort)
     symmat = symmat[vperm,vperm]
 
     farfaces[1] = 1:m
@@ -201,7 +201,6 @@ function buildcomplex3(symmat::Matrix{Int}, maxsd::Int)
             break
         end
     end
-    #gc()
     (farfaces=farfaces, firstv=firstv, grain=grain, prepairs=prepairs, symmat=symmat, nvl2ovl=vperm)
 end
 
@@ -286,7 +285,8 @@ function process_maxsd_one2i_subroutine!(
         npsupp::BitArray{1},
         l::Int,ocl::Int)
     for k = fpi[l,j]:(fpi[l+1,j]-1)
-        kk = jrv[k]	## may have to reindex this
+        ## may have to reindex this
+        kk = jrv[k]
         farfilt = jz[k]
         if zll[kk] <= ocl
             break
@@ -297,7 +297,7 @@ function process_maxsd_one2i_subroutine!(
                     faceupdate!(facecount,r,z,k,farfilt,stepsize)
                     pairupdate!(k,facecount,pflist,numpairs,npsupp,3)
                     ff2pv[k] = i
-                elseif oldclaw[ff2pv[k]]>=farfilt
+                elseif oldclaw[ff2pv[k]] >= farfilt
                     continue
                 elseif saveface(ct,kk,colsum,farfilt,oldclaw,rt,zt)
                     faceupdate!(facecount,r,z,k,farfilt,stepsize)
@@ -347,7 +347,7 @@ function process_maxsd_i2j!(
         npsupp::BitArray{1})
     for k = fpi[i+1,j]:(fpi[j,j]-1)
         kk = jrv[k]
-        if izfull[kk]>0
+        if izfull[kk] > 0
             farfilt = jz[k]
             claw = min(izfull[kk],dij)
             if claw >= farfilt && npsupp[k]
@@ -374,7 +374,7 @@ function process_maxsd_j2j!(
         izfull::Array{Int,1},ff2pv::Array{Int,1},
         pmhist::Array{Int,2},fpi::Array{Int,2},
         npsupp::BitArray{1})
-    for k = fpi[j,j]:(fpi[j+1,j]-1)
+    for k = fpi[j,j]:fpi[j+1,j]-1
         kk = jrv[k]
         if izfull[kk]>0
             claw = min(izfull[kk],dij)
@@ -395,7 +395,7 @@ function process_maxsd_j2end!(
         izfull::Array{Int,1},ff2pv::Array{Int,1},
         pmhist::Array{Int,2},fpi::Array{Int,2},
         npsupp::BitArray{1})
-    for k = fpi[j+1,j]:(jcp[j+1]-1)
+    for k = fpi[j+1,j]:jcp[j+1]-1
         kk = jrv[k]
         if izfull[kk]>0
             farfilt = jz[k]
@@ -429,30 +429,30 @@ function pairupdatedeluxe!(k::Int,i::Int,j::Int,numpairs::Array{Int,1},facecount
 end
 
 function faceupdate!(facecount::Array{Int,1},r::Array{Int,1},z::Array{Int,1},k::Int,farfilt::Int,stepsize::Int)
-    facecount[1]+=1
-    if facecount[1]>length(r)
+    facecount[1] += 1
+    if facecount[1] > length(r)
         append!(r,Array{Int}(undef,stepsize))
         append!(z,Array{Int}(undef,stepsize))
     end
-    r[facecount].= k
-    z[facecount].= farfilt
+    r[facecount] .= k
+    z[facecount] .= farfilt
 end
 
 function faceupdatedeluxe!(facecount::Array{Int,1},r::Array{Int,1},z::Array{Int,1},k::Int,farfilt::Int,stepsize::Int,s::Array{Int,1},i::Int)
-    facecount[1]+=1
-    if facecount[1]>length(r)
+    facecount[1] += 1
+    if facecount[1] > length(r)
         append!(r,Array{Int}(undef,stepsize))
         append!(z,Array{Int}(undef,stepsize))
         append!(s,Array{Int}(undef,stepsize))
     end
-    r[facecount].= k
-    z[facecount].= farfilt
-    s[facecount].= i
+    r[facecount] .= k
+    z[facecount] .= farfilt
+    s[facecount] .= i
 end
 
 function saveface(ct::Array{Int,1},kk::Int,colsum::Array{Int,1},farfilt::Int,oldclaw::Array{Int,1},rt::Array{Int,1},zt::Array{Int,1})
     for l = ct[kk]:colsum[kk]
-        if  zt[l]>= farfilt && oldclaw[rt[l]]>=farfilt
+        if zt[l] >= farfilt && oldclaw[rt[l]] >= farfilt
             return false
         end
     end
@@ -461,7 +461,7 @@ end
 
 function processfpi!(pmhist::Array{Int,2},fpi::Array{Int,2},jcp::Array{Int,1},jrv::Array{Int,1},ff2pv::Array{Int,1},m::Integer)
     for p = 1:m
-        for q = jcp[p]:(jcp[p+1]-1)
+        for q = jcp[p]:jcp[p+1]-1
             pmhist[ff2pv[jrv[q]],p]+=1
         end
     end
@@ -473,36 +473,25 @@ function processfpi!(pmhist::Array{Int,2},fpi::Array{Int,2},jcp::Array{Int,1},jr
     end
 end
 
-function generate2faces(symmat)
+function generate2faces(symmat::Matrix{Int})
     m = size(symmat,1)
-    if issparse(symmat)
-        return symmat
-    else
-        L = 0
-        for i = 1:m
-            for j = (i+1):m
-                if symmat[j,i]>0
-                    L+=1
-                end
-            end
-        end
-        rowval = Array{Int}(undef,L)
-        nzval = Array{Int}(undef,L)
-        colptr = Array{Int}(undef,m+1)
-        marker = 0
-        colptr[1] = 1
-        for i = 1:m
-            colptr[i+1]=colptr[i]
-            for j = (i+1):m
-                if symmat[j,i]>0
-                    colptr[i+1]+=1
-                    rowval[colptr[i+1]-1] = j
-                    nzval[colptr[i+1]-1] = symmat[j,i]
-                end
+    L = sum(tril(symmat, -1) .> 0)
+    rowval = Array{Int}(undef,L)
+    nzval = Array{Int}(undef,L)
+    colptr = Array{Int}(undef,m+1)
+    marker = 0
+    colptr[1] = 1
+    for i = 1:m
+        colptr[i+1]=colptr[i]
+        for j = (i+1):m
+            if symmat[j,i] > 0
+                colptr[i+1] += 1
+                rowval[colptr[i+1]-1] = j
+                nzval[colptr[i+1]-1] = symmat[j,i]
             end
         end
     end
-    return rowval,colptr,nzval
+    rowval,colptr,nzval
 end
 
 function generate3faces!(farfaces_cell, firstv_cell, grain_cell, prepairs_cell, m, symmat)
@@ -513,7 +502,7 @@ function generate3faces!(farfaces_cell, firstv_cell, grain_cell, prepairs_cell, 
     numverts = length(firstv)-1
     numedges = length(farfaces)
     stepsize = size(symmat,1)^2
-    facecount= [0]
+    facecount = [0]
     numpairs = 0
 
     closefaces = Array{Int}(undef,numedges)
@@ -604,7 +593,7 @@ function generate3faces!(farfaces_cell, firstv_cell, grain_cell, prepairs_cell, 
         j = farfaces[edge]
         dij = grain[edge]
         if i != holdi
-            idist[:].=0
+            fill!(idist, 0)
             idist[crows(firstv,farfaces,i)]	= crows(firstv,grain,i)
             idist[crows(firstv_hs,closefaces_higsorted,i)] = crows(firstv_hs,grain_higsorted,i)
             holdi = i
@@ -614,7 +603,7 @@ function generate3faces!(farfaces_cell, firstv_cell, grain_cell, prepairs_cell, 
             l = closefaces_higsorted[lp]
             if l >= i
                 break
-            elseif idist[l]!=0
+            elseif idist[l] != 0
                 clawvec[l] = min(idist[l],grain_higsorted[lp])
             end
         end
@@ -652,8 +641,8 @@ function generate3faces!(farfaces_cell, firstv_cell, grain_cell, prepairs_cell, 
     deleteat!(s,deletionrange)
 
     iso = integersinsameorder(s)
-    r[iso]=r
-    z[iso]=z
+    r[iso] = r
+    z[iso] = z
     fv3 = zeros(Int,numverts+1)
     fv3[1] = 1
     for face in s
