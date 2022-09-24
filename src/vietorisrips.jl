@@ -55,32 +55,27 @@ function buildcomplex3(symmat::Matrix{Int}, maxsd::Int)
         numpairs = [0]
         facecount = [0]
         if sd == maxsd-1
-            ff2pv = Array{Int}(undef,nl)
-            ff2pv .= m+1
+            ff2pv = fill(m+1, nl)
         end
         if sd == maxsd
             #### sort j-matrix by grain
-            alterweight = Array{Int}(undef,length(zll));
-            maxweight = maximum(zll);
-            for i = 1:length(alterweight)
-                alterweight[i] = 1+maxweight-zll[i]
-            end
-            lowfilt = [alterweight[v] for v in jrv]
-            invertiblevec = integersinsameorderbycolumn2(lowfilt,jcp)
+            alterweight = 1 + maximum(zll) .- zll
+            
+            lowfilt = alterweight[jrv]
+            invertiblevec = integersinsameorderbycolumn2(lowfilt, jcp)
             inversevec0 = Array{Int}(undef,nl)
             inversevec0[invertiblevec]=1:nl
-            jrv = [jrv[v] for v in inversevec0]
-            jz = [jz[v] for v in inversevec0]
+            jrv = jrv[inversevec0]
+            jz = jz[inversevec0]
 
-            lowfilt = [ff2pv[v] for v in jrv]
-            invertiblevec = integersinsameorderbycolumn2(lowfilt,jcp)
+            lowfilt = ff2pv[jrv]
+            invertiblevec = integersinsameorderbycolumn2(lowfilt, jcp)
             inversevec1 = Array{Int}(undef,nl)
-            inversevec1[invertiblevec]=1:nl
-            jrv = [jrv[v] for v in inversevec1]
-            jz = [jz[v] for v in inversevec1]
-            translatorvecb = [inversevec0[v] for v in inversevec1]
-            inversevec0 = []; inversevec1 = []; lowfilt = []; invertiblevec = []
-            #gc()
+            inversevec1[invertiblevec] = 1:nl
+            jrv = jrv[inversevec1]
+            jz = jz[inversevec1]
+            
+            translatorvecb = inversevec0[inversevec1]
             rt, ct, zt = transposeLighter(jrv, jcp, jz, nll)
             colsum = ct .- 1
 
@@ -90,7 +85,6 @@ function buildcomplex3(symmat::Matrix{Int}, maxsd::Int)
             processfpi!(pmhist,fpi,jcp,jrv,ff2pv,m)
 
             #### reset ff2pv for next round
-            ff2pvold = copy(ff2pv)
             ff2pv = fill(m+1, nl)
 
             oldclaw = Array{Int}(undef,m)

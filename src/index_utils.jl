@@ -1,15 +1,57 @@
 #!/usr/bin/env julia
 using SparseArrays
 
-cran(A::SparseMatrixCSC, j) = A.colptr[j]:A.colptr[j+1]-1
-cran(colptr::Array, j::Int) = colptr[j]:colptr[j+1]-1
-function cran(colptr::Array, J::Union{UnitRange{Int},Vector{Int}})
-    vcat(range.(colptr[J], colptr[J.+1].-1)...)
+cran(A::SparseMatrixCSC, j) = A.colptr[j]:(A.colptr[j+1]-1)
+cran(colptr::Array, j::Int) = colptr[j]:(colptr[j+1]-1)
+function cran(colptr::Array, J::Array{Int,1})
+    m = nval(colptr,J)
+    v = zeros(Int,m)
+    c = 0
+    for p=1:length(J)
+        k = nval(colptr,J[p])
+        v[c+1:c+k]=cran(colptr,J[p])
+        c += k
+    end
+    return v
+end
+function cran(colptr::Array, J::UnitRange{Int})
+    m = nval(colptr,J)
+    v = zeros(Int,m)
+    c = 0
+    for p=1:length(J)
+        k = nval(colptr,J[p])
+        v[c+1:c+k]=cran(colptr,J[p])
+        c += k
+    end
+    return v
 end
 cran(colptr::UnitRange, j) = colptr[j]
 
-crows(A::SparseMatrixCSC, j) = A.rowval[A.colptr[j]:A.colptr[j+1]-1]
-crows(colptr::Array, rowval::Array, j) = rowval[cran(colptr, j)]
+"""
+For a column sparse matrix with column pattern `colptr`, counts the number of values stored for column `j`.
+"""
+nval(colptr, j::Int) = colptr[j+1]-colptr[j]
+"""
+For a column sparse matrix with column pattern `colptr`, counts the number of values stored for column j, for each j in `J`.
+"""
+function nval(colptr, J)
+    c = 0
+    for p = 1:length(J)
+        c += nval(colptr,J[p])
+    end
+    return c
+end
+
+crows(A::SparseMatrixCSC, j) = A.rowval[cran(A, j)]
+crows(colptr::Array,rowval::Array, j) = rowval[cran(colptr, j)]
+
+function findcol(cp, k)
+    i = 1
+    while cp[i]<=k
+        i+=1
+    end
+    return i-1
+end
 
 function extend!(x::Array{Int,1},n::Int)
     if length(x) < n
