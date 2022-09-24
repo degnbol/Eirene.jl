@@ -45,21 +45,11 @@ function integersinsameorderbycolumn2(v::Array{Int,1}, colptr)
     x = zeros(Int, maximum(v))
     z = Array{Int}(undef,length(v))
     for j = 1:numcols
-        if colptr[j] == colptr[j+1]
-            continue
-        end
-        for i = colptr[j]:(colptr[j+1]-1)
-            x[v[i]]+=1
-        end
-        maxv = v[colptr[j]]
-        minv = maxv
-        for i = (colptr[j]+1):(colptr[j+1]-1)
-            if v[i] > maxv
-                maxv = v[i]
-            elseif v[i] < minv
-                minv = v[i]
-            end
-        end
+        colptr[j] != colptr[j+1] || continue
+        vs = v[colptr[j]:colptr[j+1]-1]
+        for _v in vs x[_v] += 1 end
+        maxv = maximum(vs)
+        minv = minimum(vs)
         prevsum = colptr[j]
         for i = minv:maxv
             sum = prevsum + x[i]
