@@ -30,8 +30,6 @@ __precompile__()
 module Eirene
 
 using Distances
-# using MultivariateStats
-# using SparseArrays
 using LinearAlgebra
 using Statistics: mean
 
@@ -66,10 +64,8 @@ function eirene(pointcloud::Matrix{Float64}, maxdim::Int; minrad=-Inf, maxrad=In
     # just valid for floating point inputs, and with a bit more data in the 
     # output
     t, ocg2rad = trueordercanonicalform(d)
-
     t = (1 + maximum(t)) .- t
     ocg2rad = reverse(ocg2rad, dims=1)
-
     if any(d .> maxrad)
         t .-= 1
         deleteat!(ocg2rad, 1)
@@ -164,5 +160,18 @@ dfs = CSV.read.(fnames, DataFrame)
 
 xyzs = [Matrix(df[!, [:x, :y, :z]]) for df in dfs]
 
-@time Eirene.eirene.(xyzs, 2; minrad=0., maxrad=1.);
+@time Eirene.eirene.(xyzs[1:8], 2; minrad=0.);
+
+@time eirene.(pairwise.(Ref(Euclidean()), xyzs[1:8], dims=1); maxdim=2, minrad=0.);
+
+
+
+@time for (fname, xyz) in zip(basename.(fnames), xyzs[1:4])
+    bs, rs = Eirene.eirene(xyz, 2; minrad=0.)
+    
+    open("lars/$fname", "w") do io
+        obj = Dict("H$i" => (barcode=b, representatives=r) for (i,(b,r)) ∈ enumerate(zip(bs, rs)))
+        JSON.print(io, obj)
+    end
+end
 
