@@ -299,8 +299,8 @@ function maxnonsingblock_simplex(farfaces,firstv,plo,phi,tid,sd)
 
     lowtranslator[tid[sd]] = 1:numnlpl
     brv = ff2aflight(farfaces,firstv,sd,phi[sd])
-    brv = reshape(brv,length(brv))
-    bcp = convert(Array{Int,1},1:sd:(nump*sd+1))
+    brv = brv[:]
+    bcp = convert(Vector{Int}, 1:sd:(nump*sd+1))
     supportedmatrix!(brv,bcp,tid[sd],1:nump,numl)
     brv .= lowtranslator[brv]
     # note there's no +1 b/c bcp is already 1 elt. too long
@@ -309,12 +309,12 @@ function maxnonsingblock_simplex(farfaces,firstv,plo,phi,tid,sd)
 end
 
 function unpack!(grain, farfaces, firstv, trv, tcp, plo, phi, tid, maxsd::Int)
-    Lirv = Array{Array{Int,1},1}(undef,maxsd)
-    Licp = Array{Array{Int,1},1}(undef,maxsd)
-    Lrv  = Array{Array{Int,1},1}(undef,maxsd)
-    Lcp  = Array{Array{Int,1},1}(undef,maxsd)
-    Rrv  = Array{Array{Int,1},1}(undef,maxsd)
-    Rcp  = Array{Array{Int,1},1}(undef,maxsd)
+    Lirv = Vector{Vector{Int}}(undef,maxsd)
+    Licp = Vector{Vector{Int}}(undef,maxsd)
+    Lrv  = Vector{Vector{Int}}(undef,maxsd)
+    Lcp  = Vector{Vector{Int}}(undef,maxsd)
+    Rrv  = Vector{Vector{Int}}(undef,maxsd)
+    Rcp  = Vector{Vector{Int}}(undef,maxsd)
 
     N = maxsd-1
     if maxsd >= 2
@@ -323,10 +323,10 @@ function unpack!(grain, farfaces, firstv, trv, tcp, plo, phi, tid, maxsd::Int)
         Lirv[maxsd] = Array{Int,1}(undef,0)
         Licp[maxsd] = ones(Int,1)
     end
-    Lrv[maxsd] = Array{Int,1}(undef,0)
-    Lcp[maxsd] = Array{Int,1}(undef,0)
-    Rrv[maxsd] = Array{Int,1}(undef,0)
-    Rcp[maxsd] = Array{Int,1}(undef,0)
+    Lrv[maxsd] = Vector{Int}(undef,0)
+    Lcp[maxsd] = Vector{Int}(undef,0)
+    Rrv[maxsd] = Vector{Int}(undef,0)
+    Rcp[maxsd] = Vector{Int}(undef,0)
 
     for i = 2:N
         Lrv[i],Lcp[i],Lirv[i],Licp[i],Rrv[i],Rcp[i] = boundarylimit_simplex(farfaces,firstv,trv,tcp,plo,phi,tid,i)

@@ -66,7 +66,7 @@ function finddownstreamelements_embeddedupperunitriangularmatrix(
     downstreamelements
 end
 
-function schurit4!(	Mrv,Mcp,Mm,Mn,Mn0,
+function schurit4!(Mrv,Mcp,Mm,Mn,Mn0,
         rowlab,collab,
         Jprows,Jpcols,numjunpairs,
         Sprows,Spcols,numsenpairs,

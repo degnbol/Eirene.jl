@@ -113,7 +113,7 @@ function trueordercanonicalform_subr!(M, perm, oca, oca2rad, post, k, m::Int)
     for p  = 1:m
         if M[perm[p]] != M[perm[post[1]]]
             post[1] = p
-            k[1] =  k[1]+1
+            k[1] = k[1]+1
             oca2rad[k[1]] = M[perm[post[1]]]
         end
         oca[perm[p]] = k[1]

@@ -39,7 +39,7 @@ permutation z on {1,...,length(v)} so that for all j
 - crows(colptr,v[z],j) is an array in sorted order
 """
 function integersinsameorderbycolumn2(v::Array{Int,1}, colptr)
-    numcols = length(colptr) - 1
+    numcols = length(colptr)-1
     m = length(v)
     v .-= minimum(v) - 1
     x = zeros(Int, maximum(v))

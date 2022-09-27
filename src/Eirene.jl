@@ -64,22 +64,23 @@ function eirene(pointcloud::Matrix{Float64}, maxdim::Int; minrad=-Inf, maxrad=In
     # just valid for floating point inputs, and with a bit more data in the 
     # output
     t, ocg2rad = trueordercanonicalform(d)
-    t = (1 + maximum(t)) .- t
-    ocg2rad = reverse(ocg2rad, dims=1)
+    reverse!(ocg2rad)
     if any(d .> maxrad)
-        t .-= 1
+        t = maximum(t) .- t
         deleteat!(ocg2rad, 1)
+    else
+        t = 1+maximum(t) .- t
     end
 
     # this step is necessary in order to cover the case where some vertices 
     # never enter the filtration
-    vertices2keep = findall(diag(t) .!= 0)
-    t = t[vertices2keep, vertices2keep]
+    noFiltVerts = findall(diag(t) .!= 0)
+    t = t[noFiltVerts, noFiltVerts]
 
     #### Build the complex
     C = buildcomplex3(t, maxdim+2)
     # this covers the case where some vertices never enter the filtration
-    nvl2ovl = vertices2keep[C.nvl2ovl]
+    nvl2ovl = noFiltVerts[C.nvl2ovl]
     
     #### Compute persistence
     P = persistf2(C.farfaces, C.firstv, C.prepairs, C.grain)
@@ -153,25 +154,28 @@ eirene(rand(100, 3), 2; minrad=0)
 end;
 
 
-using CSV, DataFrames
+# using CSV, DataFrames
+# using .Threads: @threads
+#
+# fnames = readdir(expanduser("~/protTDA/data/GASS/xyzChain"); join=true)
+# dfs = CSV.read.(fnames, DataFrame)
+#
+# xyzs = [Matrix(df[!, [:x, :y, :z]]) for df in dfs]
+#
+# for xyz in xyzs[1:8]
+#     @time Eirene.eirene(xyz, 2; minrad=0.);
+# end
 
-fnames = readdir(expanduser("~/protTDA/data/GASS/xyzChain"); join=true)
-dfs = CSV.read.(fnames, DataFrame)
-
-xyzs = [Matrix(df[!, [:x, :y, :z]]) for df in dfs]
-
-@time Eirene.eirene.(xyzs[1:8], 2; minrad=0.);
-
-@time eirene.(pairwise.(Ref(Euclidean()), xyzs[1:8], dims=1); maxdim=2, minrad=0.);
-
-
-
-@time for (fname, xyz) in zip(basename.(fnames), xyzs[1:4])
-    bs, rs = Eirene.eirene(xyz, 2; minrad=0.)
-    
-    open("lars/$fname", "w") do io
-        obj = Dict("H$i" => (barcode=b, representatives=r) for (i,(b,r)) ∈ enumerate(zip(bs, rs)))
-        JSON.print(io, obj)
-    end
-end
+# @time eirene.(pairwise.(Ref(Euclidean()), xyzs[1:8], dims=1); maxdim=2, minrad=0.);
+#
+#
+#
+# @time for (fname, xyz) in zip(basename.(fnames), xyzs[1:4])
+#     bs, rs = Eirene.eirene(xyz, 2; minrad=0.)
+#    
+#     open("lars/$fname", "w") do io
+#         obj = Dict("H$i" => (barcode=b, representatives=r) for (i,(b,r)) ∈ enumerate(zip(bs, rs)))
+#         JSON.print(io, obj)
+#     end
+# end
 

@@ -30,17 +30,14 @@ function buildcomplex3(symmat::Matrix{Int}, maxsd::Int)
         return (farfaces=farfaces, firstv=firstv, grain=grain, prepairs=prepairs, symmat=symmat, nvl2ovl=vperm)
     end
 
-    fpi = Array{Int}(undef,0)
-    ff2pv = Array{Int}(undef,0)
-    pmhist = zeros(Int,m,m)
+    fpi = Int[]
+    ff2pv = Int[]
+    pmhist = zeros(Int, m, m)
 
     for sd = 3:maxsd
         nl = length(farfaces[sd-1])
         nll = length(farfaces[sd-2])
-
-        startlength = nl
-        stepsize = min(10^7, ceil(Int, nl/4))
-
+        
         npsupp = trues(nl)
         pflist = Array{Int}(undef,nl)
         jrv = farfaces[sd-1]
@@ -48,23 +45,21 @@ function buildcomplex3(symmat::Matrix{Int}, maxsd::Int)
         jz = grain[sd-1]
         zll = grain[sd-2]
         izfull = Array{Int}(undef,nll)
-        r = Array{Int}(undef,startlength)
-        z = Array{Int}(undef,startlength)
+        r = Int[]
+        z = Int[]
         c = Array{Int}(undef,m+1)
         c[1] = 1
-        numpairs = [0]
-        facecount = [0]
+        
         if sd == maxsd-1
             ff2pv = fill(m+1, nl)
-        end
-        if sd == maxsd
+        elseif sd == maxsd
             #### sort j-matrix by grain
             alterweight = 1 + maximum(zll) .- zll
             
             lowfilt = alterweight[jrv]
             invertiblevec = integersinsameorderbycolumn2(lowfilt, jcp)
             inversevec0 = Array{Int}(undef,nl)
-            inversevec0[invertiblevec]=1:nl
+            inversevec0[invertiblevec] = 1:nl
             jrv = jrv[inversevec0]
             jz = jz[inversevec0]
 
@@ -82,7 +77,17 @@ function buildcomplex3(symmat::Matrix{Int}, maxsd::Int)
             # for sloth (apologies) we'll leave some unsed stuff in row m+1
             pmhist = zeros(Int,m+1,m)
             fpi = zeros(Int,m+1,m)
-            processfpi!(pmhist,fpi,jcp,jrv,ff2pv,m)
+            for p = 1:m
+                for q = jcp[p]:jcp[p+1]-1
+                    pmhist[ff2pv[jrv[q]],p]+=1
+                end
+            end
+            for p = 1:m
+                fpi[1,p] = jcp[p]
+                for q = 1:m
+                    fpi[q+1,p] = fpi[q,p]+pmhist[q,p]
+                end
+            end
 
             #### reset ff2pv for next round
             ff2pv = fill(m+1, nl)
@@ -90,103 +95,177 @@ function buildcomplex3(symmat::Matrix{Int}, maxsd::Int)
             oldclaw = Array{Int}(undef,m)
         end
 
+        numpairs = 0
+        
         for i = 1:m
-            izfull .= 0
-            lrange = cran(jcp,i)
+            fill!(izfull, 0)
+            lrange = cran(jcp, i)
             izfull[jrv[lrange]] = jz[lrange]
 
-            for j = (i+1):m
+            for j = i+1:m
                 dij = symmat[j,i]
                 dij == 0 && continue
                 if sd < maxsd-1
-                    process_sd_lt_maxsd!(i,j,dij,stepsize,
-                                         facecount,numpairs,
-                                         jrv,jcp,jz,
-                                         r,z,pflist,
-                                         izfull,ff2pv,pmhist,
-                                         npsupp)
-                elseif sd == maxsd-1
-                    process_sd_onelt_maxsd_1!(i,j,dij,stepsize,
-                                              facecount,numpairs,
-                                              jrv,jcp,jz,
-                                              r,z,pflist,
-                                              izfull,ff2pv,pmhist,
-                                              npsupp)
-                else
-                    for l = 1:(i-1)
-                        oldclaw[l] = minimum(symmat[l,[i,j]])
+                    for k = cran(jcp,j)
+                        kk = jrv[k]
+                        farfilt = jz[k]
+                        if izfull[kk] > 0
+                            claw = min(izfull[kk],dij)
+                            push!(r, k)
+                            push!(z, min(farfilt,claw))
+                            if claw >= farfilt && npsupp[k]
+                                numpairs += 1
+                                pflist[numpairs] = length(r)
+                                npsupp[k] = false
+                            end
+                        end
                     end
-                    process_maxsd_one2i!(i,j,dij,stepsize,
-                                         facecount,numpairs,
-                                         jrv,jcp,jz,
-                                         r,z,pflist,
-                                         oldclaw,zll,colsum,
-                                         rt,ct,zt,
-                                         izfull,ff2pv,
-                                         pmhist,fpi,
-                                         npsupp)
+                elseif sd == maxsd-1
+                    for k = cran(jcp,j)
+                        kk = jrv[k]
+                        farfilt = jz[k]
+                        if izfull[kk] > 0
+                            claw = min(izfull[kk],dij)
+                            push!(r, k)
+                            push!(z, min(farfilt,claw))
+                            if claw >= farfilt && npsupp[k]
+                                numpairs += 1
+                                pmhist[i,j] += 1
+                                npsupp[k] = false
+                                pflist[numpairs] = length(r)
+                                ff2pv[k] = i
+                            end
+                        end
+                    end
+                else
+                    oldclaw[1:i-1] = minimum(symmat[1:i-1, [i,j]]; dims=2)
+                    for l = 1:(i-1)
+                        if fpi[l,j] < fpi[l+1,j]
+                            ocl = oldclaw[l]
+                            if ocl < dij
+                                for k = fpi[l,j]:(fpi[l+1,j]-1)
+                                    ## may have to reindex this
+                                    kk = jrv[k]
+                                    farfilt = jz[k]
+                                    if zll[kk] <= ocl
+                                        break
+                                    elseif oldclaw[l] < min(farfilt,izfull[kk])
+                                        claw = min(izfull[kk],dij)
+                                        if claw >= farfilt
+                                            if npsupp[k]
+                                                push!(r, k)
+                                                push!(z, farfilt)
+                                                numpairs += 1
+                                                pflist[numpairs] = length(r)
+                                                npsupp[k] = false
+                                                ff2pv[k] = i
+                                            elseif oldclaw[ff2pv[k]] >= farfilt
+                                                continue
+                                            elseif saveface(ct,kk,colsum,farfilt,oldclaw,rt,zt)
+                                                push!(r, k)
+                                                push!(z, farfilt)
+                                            end
+                                        elseif (claw>0) && saveface(ct,kk,colsum,claw,oldclaw,rt,zt)
+                                            push!(r, k)
+                                            push!(z, claw)
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
 
-                    process_maxsd_i2i!(i,j,dij,stepsize,
-                                       facecount,numpairs,
-                                       jrv,jcp,jz,
-                                       r,z,pflist,
-                                       oldclaw,zll,colsum,
-                                       rt,ct,zt,
-                                       izfull,ff2pv,
-                                       pmhist,fpi,
-                                       npsupp)
+                    for k = fpi[i,j]:(fpi[i+1,j]-1)
+                        kk = jrv[k]
+                        farfilt = jz[k]
+                        if dij >= farfilt && npsupp[k]
+                            push!(r, k)
+                            push!(z, farfilt)
+                            numpairs += 1
+                            pflist[numpairs] = length(r)
+                            npsupp[k] = false
+                            ff2pv[k] = i
+                        else
+                            farfilt = min(dij,farfilt)
+                            if saveface(ct,kk,colsum,farfilt,oldclaw,rt,zt)
+                                push!(r, k)
+                                push!(z, farfilt)
+                            end
+                        end
+                    end
 
-                    process_maxsd_i2j!(i,j,dij,stepsize,
-                                       facecount,numpairs,
-                                       jrv,jcp,jz,
-                                       r,z,pflist,
-                                       oldclaw,zll,colsum,
-                                       rt,ct,zt,
-                                       izfull,ff2pv,
-                                       pmhist,fpi,
-                                       npsupp)
+                    for k = fpi[i+1,j]:fpi[j,j]-1
+                        kk = jrv[k]
+                        if izfull[kk] > 0
+                            farfilt = jz[k]
+                            claw = min(izfull[kk],dij)
+                            if claw >= farfilt && npsupp[k]
+                                push!(r, k)
+                                push!(z, farfilt)
+                                numpairs += 1
+                                pflist[numpairs] = length(r)
+                                npsupp[k] = false
+                                ff2pv[k] = i
+                            else
+                                farfilt = min(claw,farfilt)
+                                if saveface(ct,kk,colsum,farfilt,oldclaw,rt,zt)
+                                    push!(r, k)
+                                    push!(z, farfilt)
+                                end
+                            end
+                        end
+                    end
 
-                    process_maxsd_j2j!(i,j,dij,stepsize,
-                                       facecount,numpairs,
-                                       jrv,jcp,jz,
-                                       r,z,pflist,
-                                       oldclaw,zll,colsum,
-                                       rt,ct,zt,
-                                       izfull,ff2pv,
-                                       pmhist,fpi,
-                                       npsupp)
+                    for k = fpi[j,j]:fpi[j+1,j]-1
+                        kk = jrv[k]
+                        if izfull[kk] > 0
+                            claw = min(izfull[kk],dij)
+                            if saveface(ct,kk,colsum,claw,oldclaw,rt,zt)
+                                push!(r, k)
+                                push!(z, claw)
+                            end
+                        end
+                    end
 
-                    process_maxsd_j2end!(i,j,dij,stepsize,
-                                         facecount,numpairs,
-                                         jrv,jcp,jz,
-                                         r,z,pflist,
-                                         oldclaw,zll,colsum,
-                                         rt,ct,zt,
-                                         izfull,ff2pv,
-                                         pmhist,fpi,
-                                         npsupp)
+                    for k = fpi[j+1,j]:jcp[j+1]-1
+                        kk = jrv[k]
+                        if izfull[kk] > 0
+                            farfilt = jz[k]
+                            claw = min(izfull[kk],dij)
+                            if claw >= farfilt && npsupp[k]
+                                push!(r, k)
+                                push!(z, farfilt)
+                                numpairs += 1
+                                pflist[numpairs] = length(r)
+                                npsupp[k] = false
+                                ff2pv[k] = i
+                            else
+                                farfilt = min(claw,farfilt)
+                                if saveface(ct,kk,colsum,farfilt,oldclaw,rt,zt)
+                                    push!(r, k)
+                                    push!(z, farfilt)
+                                end
+                            end
+                        end
+                    end
                 end
             end
             # update the column pattern and the total number of nonzeros
             # encountered per codim2 face
-            c[i+1] = facecount[1]+1
+            c[i+1] = length(r)+1
             if sd == maxsd
                 colsum[jrv[cran(jcp,i)]] .+= 1
             end
         end
-        delrange = c[end]:length(r)
-        deleteat!(r,delrange)
-        deleteat!(z,delrange)
-        deleteat!(pflist,(numpairs[1]+1):nl)
-        if sd == maxsd
-            r = translatorvecb[r]
-        end
+
+        deleteat!(pflist, numpairs+1:nl)
+        if sd == maxsd r = translatorvecb[r] end
         firstv[sd] = c
         farfaces[sd] = r
         prepairs[sd] = pflist
         grain[sd] = z
         if isempty(farfaces[sd])
-            for nextcard = (sd+1):maxsd
+            for nextcard = sd+1:maxsd
                 firstv[nextcard] = [1;1]
                 farfaces[nextcard] = Array{Int}(undef,0)
                 prepairs[nextcard] = Array{Int}(undef,0)
@@ -198,251 +277,6 @@ function buildcomplex3(symmat::Matrix{Int}, maxsd::Int)
     (farfaces=farfaces, firstv=firstv, grain=grain, prepairs=prepairs, symmat=symmat, nvl2ovl=vperm)
 end
 
-function process_sd_lt_maxsd!(
-        i::Int,j::Int,dij::Int,stepsize::Int,
-        facecount::Array{Int,1},numpairs::Array{Int,1},
-        jrv::Array{Int,1},jcp::Array{Int,1},jz::Array{Int,1},
-        r::Array{Int,1},z::Array{Int,1},pflist::Array{Int,1},
-        izfull::Array{Int,1},ff2pv::Array{Int,1},pmhist::Array{Int,2},
-        npsupp::BitArray{1})
-    for k = cran(jcp,j)
-        kk = jrv[k]
-        farfilt = jz[k]
-        if izfull[kk]>0
-            claw = min(izfull[kk],dij)
-            faceupdate!(facecount,r,z,k,min(farfilt,claw),stepsize)
-            if claw >= farfilt && npsupp[k]
-                pairupdate!(k,facecount,pflist,numpairs,npsupp,1)
-            end
-        end
-    end
-end
-
-function process_sd_onelt_maxsd_1!(
-        i::Int,j::Int,dij::Int,stepsize::Int,
-        facecount::Array{Int,1},numpairs::Array{Int,1},
-        jrv::Array{Int,1},jcp::Array{Int,1},jz::Array{Int,1},
-        r::Array{Int,1},z::Array{Int,1},pflist::Array{Int,1},
-        izfull::Array{Int,1},ff2pv::Array{Int,1},pmhist::Array{Int,2},
-        npsupp::BitArray{1})
-    for k = cran(jcp,j)
-        kk = jrv[k]
-        farfilt = jz[k]
-        if izfull[kk] > 0
-            claw = min(izfull[kk],dij)
-            faceupdate!(facecount,r,z,k,min(farfilt,claw),stepsize)
-            if npsupp[k] && (claw >= farfilt)
-                pairupdatedeluxe!(k,i,j,numpairs,facecount,pflist,ff2pv,npsupp,pmhist)
-            end
-        end
-    end
-end
-
-function process_maxsd_one2i!(
-        i::Int,j::Int,dij::Int,stepsize::Int,
-        facecount::Array{Int,1},numpairs::Array{Int,1},
-        jrv::Array{Int,1},jcp::Array{Int,1},jz::Array{Int,1},
-        r::Array{Int,1},z::Array{Int,1},pflist::Array{Int,1},
-        oldclaw::Array{Int,1},zll::Array{Int,1},colsum::Array{Int,1},
-        rt::Array{Int,1},ct::Array{Int,1},zt::Array{Int,1},
-        izfull::Array{Int,1},ff2pv::Array{Int,1},
-        pmhist::Array{Int,2},fpi::Array{Int,2},
-        npsupp::BitArray{1})
-    for l = 1:(i-1)
-        if fpi[l,j]<fpi[l+1,j]
-            ocl = oldclaw[l]
-            if ocl < dij
-                process_maxsd_one2i_subroutine!(i,j,dij,stepsize,
-                                                facecount,numpairs,
-                                                jrv,jcp,jz,
-                                                r,z,pflist,
-                                                oldclaw,zll,colsum,
-                                               rt,ct,zt,
-                                               izfull,ff2pv,
-                                               pmhist,fpi,
-                                               npsupp,
-                                              l,ocl)
-            end
-        end
-    end
-end
-
-function process_maxsd_one2i_subroutine!(
-        i::Int,j::Int,dij::Int,stepsize::Int,
-        facecount::Array{Int,1},numpairs::Array{Int,1},
-        jrv::Array{Int,1},jcp::Array{Int,1},jz::Array{Int,1},
-        r::Array{Int,1},z::Array{Int,1},pflist::Array{Int,1},
-        oldclaw::Array{Int,1},zll::Array{Int,1},colsum::Array{Int,1},
-        rt::Array{Int,1},ct::Array{Int,1},zt::Array{Int,1},
-        izfull::Array{Int,1},ff2pv::Array{Int,1},
-        pmhist::Array{Int,2},fpi::Array{Int,2},
-        npsupp::BitArray{1},
-        l::Int,ocl::Int)
-    for k = fpi[l,j]:(fpi[l+1,j]-1)
-        ## may have to reindex this
-        kk = jrv[k]
-        farfilt = jz[k]
-        if zll[kk] <= ocl
-            break
-        elseif oldclaw[l] < min(farfilt,izfull[kk])
-            claw = min(izfull[kk],dij)
-            if claw >= farfilt
-                if npsupp[k]
-                    faceupdate!(facecount,r,z,k,farfilt,stepsize)
-                    pairupdate!(k,facecount,pflist,numpairs,npsupp,3)
-                    ff2pv[k] = i
-                elseif oldclaw[ff2pv[k]] >= farfilt
-                    continue
-                elseif saveface(ct,kk,colsum,farfilt,oldclaw,rt,zt)
-                    faceupdate!(facecount,r,z,k,farfilt,stepsize)
-                end
-            elseif (claw>0) && saveface(ct,kk,colsum,claw,oldclaw,rt,zt)
-                faceupdate!(facecount,r,z,k,claw,stepsize)
-            end
-        end
-    end
-end
-
-function process_maxsd_i2i!(
-        i::Int,j::Int,dij::Int,stepsize::Int,
-        facecount::Array{Int,1},numpairs::Array{Int,1},
-        jrv::Array{Int,1},jcp::Array{Int,1},jz::Array{Int,1},
-        r::Array{Int,1},z::Array{Int,1},pflist::Array{Int,1},
-        oldclaw::Array{Int,1},zll::Array{Int,1},colsum::Array{Int,1},
-        rt::Array{Int,1},ct::Array{Int,1},zt::Array{Int,1},
-        izfull::Array{Int,1},ff2pv::Array{Int,1},
-        pmhist::Array{Int,2},fpi::Array{Int,2},
-        npsupp::BitArray{1})
-    for k = fpi[i,j]:(fpi[i+1,j]-1)
-        kk = jrv[k]
-        farfilt = jz[k]
-        if dij >= farfilt && npsupp[k]
-            faceupdate!(facecount,r,z,k,farfilt,stepsize)
-            pairupdate!(k,facecount,pflist,numpairs,npsupp,4)
-            ff2pv[k] = i
-        else
-            farfilt = min(dij,farfilt)
-            if saveface(ct,kk,colsum,farfilt,oldclaw,rt,zt)
-                faceupdate!(facecount,r,z,k,farfilt,stepsize)
-            end
-        end
-    end
-end
-
-function process_maxsd_i2j!(
-        i::Int,j::Int,dij::Int,stepsize::Int,
-        facecount::Array{Int,1},numpairs::Array{Int,1},
-        jrv::Array{Int,1},jcp::Array{Int,1},jz::Array{Int,1},
-        r::Array{Int,1},z::Array{Int,1},pflist::Array{Int,1},
-        oldclaw::Array{Int,1},zll::Array{Int,1},colsum::Array{Int,1},
-        rt::Array{Int,1},ct::Array{Int,1},zt::Array{Int,1},
-        izfull::Array{Int,1},ff2pv::Array{Int,1},
-        pmhist::Array{Int,2},fpi::Array{Int,2},
-        npsupp::BitArray{1})
-    for k = fpi[i+1,j]:(fpi[j,j]-1)
-        kk = jrv[k]
-        if izfull[kk] > 0
-            farfilt = jz[k]
-            claw = min(izfull[kk],dij)
-            if claw >= farfilt && npsupp[k]
-                faceupdate!(facecount,r,z,k,farfilt,stepsize)
-                pairupdate!(k,facecount,pflist,numpairs,npsupp,5)
-                ff2pv[k] = i
-            else
-                farfilt = min(claw,farfilt)
-                if saveface(ct,kk,colsum,farfilt,oldclaw,rt,zt)
-                    faceupdate!(facecount,r,z,k,farfilt,stepsize)
-                end
-            end
-        end
-    end
-end
-
-function process_maxsd_j2j!(
-        i::Int,j::Int,dij::Int,stepsize::Int,
-        facecount::Array{Int,1},numpairs::Array{Int,1},
-        jrv::Array{Int,1},jcp::Array{Int,1},jz::Array{Int,1},
-        r::Array{Int,1},z::Array{Int,1},pflist::Array{Int,1},
-        oldclaw::Array{Int,1},zll::Array{Int,1},colsum::Array{Int,1},
-        rt::Array{Int,1},ct::Array{Int,1},zt::Array{Int,1},
-        izfull::Array{Int,1},ff2pv::Array{Int,1},
-        pmhist::Array{Int,2},fpi::Array{Int,2},
-        npsupp::BitArray{1})
-    for k = fpi[j,j]:fpi[j+1,j]-1
-        kk = jrv[k]
-        if izfull[kk]>0
-            claw = min(izfull[kk],dij)
-            if saveface(ct,kk,colsum,claw,oldclaw,rt,zt)
-                faceupdate!(facecount,r,z,k,claw,stepsize)
-            end
-        end
-    end
-end
-
-function process_maxsd_j2end!(
-        i::Int,j::Int,dij::Int,stepsize::Int,
-        facecount::Array{Int,1},numpairs::Array{Int,1},
-        jrv::Array{Int,1},jcp::Array{Int,1},jz::Array{Int,1},
-        r::Array{Int,1},z::Array{Int,1},pflist::Array{Int,1},
-        oldclaw::Array{Int,1},zll::Array{Int,1},colsum::Array{Int,1},
-        rt::Array{Int,1},ct::Array{Int,1},zt::Array{Int,1},
-        izfull::Array{Int,1},ff2pv::Array{Int,1},
-        pmhist::Array{Int,2},fpi::Array{Int,2},
-        npsupp::BitArray{1})
-    for k = fpi[j+1,j]:jcp[j+1]-1
-        kk = jrv[k]
-        if izfull[kk]>0
-            farfilt = jz[k]
-            claw = min(izfull[kk],dij)
-            if claw >= farfilt && npsupp[k]
-                faceupdate!(facecount,r,z,k,farfilt,stepsize)
-                pairupdate!(k,facecount,pflist,numpairs,npsupp,6)
-                ff2pv[k] = i
-            else
-                farfilt = min(claw,farfilt)
-                if saveface(ct,kk,colsum,farfilt,oldclaw,rt,zt)
-                    faceupdate!(facecount,r,z,k,farfilt,stepsize)
-                end
-            end
-        end
-    end
-end
-
-function pairupdate!(k::Int,facecount::Array{Int,1},pflist::Array{Int,1},numpairs::Array{Int,1},npsupp::BitArray{1},iterateNumber)
-    numpairs[1] += 1
-    pflist[numpairs[1]] = facecount[1]
-    npsupp[k] = false
-end
-
-function pairupdatedeluxe!(k::Int,i::Int,j::Int,numpairs::Array{Int,1},facecount::Array{Int,1},pflist::Array{Int,1},ff2pv::Array{Int,1},npsupp::BitArray{1},pmhist::Array{Int,2})
-    numpairs[1] += 1
-    pmhist[i,j] += 1
-    npsupp[k] = false
-    pflist[numpairs[1]] = facecount[1]
-    ff2pv[k] = i
-end
-
-function faceupdate!(facecount::Array{Int,1},r::Array{Int,1},z::Array{Int,1},k::Int,farfilt::Int,stepsize::Int)
-    facecount[1] += 1
-    if facecount[1] > length(r)
-        append!(r,Array{Int}(undef,stepsize))
-        append!(z,Array{Int}(undef,stepsize))
-    end
-    r[facecount] .= k
-    z[facecount] .= farfilt
-end
-
-function faceupdatedeluxe!(facecount::Array{Int,1},r::Array{Int,1},z::Array{Int,1},k::Int,farfilt::Int,stepsize::Int,s::Array{Int,1},i::Int)
-    facecount[1] += 1
-    if facecount[1] > length(r)
-        append!(r,Array{Int}(undef,stepsize))
-        append!(z,Array{Int}(undef,stepsize))
-        append!(s,Array{Int}(undef,stepsize))
-    end
-    r[facecount] .= k
-    z[facecount] .= farfilt
-    s[facecount] .= i
-end
 
 function saveface(ct::Array{Int,1},kk::Int,colsum::Array{Int,1},farfilt::Int,oldclaw::Array{Int,1},rt::Array{Int,1},zt::Array{Int,1})
     for l = ct[kk]:colsum[kk]
@@ -451,20 +285,6 @@ function saveface(ct::Array{Int,1},kk::Int,colsum::Array{Int,1},farfilt::Int,old
         end
     end
     true
-end
-
-function processfpi!(pmhist::Array{Int,2},fpi::Array{Int,2},jcp::Array{Int,1},jrv::Array{Int,1},ff2pv::Array{Int,1},m::Integer)
-    for p = 1:m
-        for q = jcp[p]:jcp[p+1]-1
-            pmhist[ff2pv[jrv[q]],p]+=1
-        end
-    end
-    for p = 1:m
-        fpi[1,p] = jcp[p]
-        for q = 1:m
-            fpi[q+1,p] = fpi[q,p]+pmhist[q,p]
-        end
-    end
 end
 
 function generate2faces(symmat::Matrix{Int})
@@ -495,14 +315,10 @@ function generate3faces!(farfaces_cell, firstv_cell, grain_cell, prepairs_cell, 
 
     numverts = length(firstv)-1
     numedges = length(farfaces)
-    stepsize = size(symmat,1)^2
-    facecount = [0]
     numpairs = 0
 
     closefaces = Array{Int}(undef,numedges)
-    for i = 1:m
-        closefaces[cran(firstv,i)] .= i
-    end
+    for i = 1:m closefaces[cran(firstv,i)] .= i end
     iso = integersinsameorder(farfaces)
     closefaces_higsorted = Array{Int}(undef,numedges)
     grain_higsorted = Array{Int}(undef,numedges)
@@ -572,7 +388,9 @@ function generate3faces!(farfaces_cell, firstv_cell, grain_cell, prepairs_cell, 
                                     end
                                 end
                                 if keepface
-                                    faceupdatedeluxe!(facecount,r,z,kp,dijk,stepsize,s,i)
+                                    push!(r, kp)
+                                    push!(z, dijk)
+                                    push!(s, i)
                                 end
                             end
                         end
@@ -621,13 +439,15 @@ function generate3faces!(farfaces_cell, firstv_cell, grain_cell, prepairs_cell, 
                 end
             end
             if keepface
-                faceupdatedeluxe!(facecount,r,z,kp,dijk,stepsize,s,i)
+                push!(r, kp)
+                push!(z, dijk)
+                push!(s, i)
             end
         end
         ####
     end
 
-    num3faces = facecount[1]
+    num3faces = length(r)
     holderlengths = length(r)
     deletionrange = (num3faces+1):holderlengths
     deleteat!(r,deletionrange)
