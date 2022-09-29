@@ -47,13 +47,11 @@ end
 function schurit4!(Mrv::Vector{Int},Mcp::Vector{Int},Mm::Int,Mn::Int,Mn0::Int,
         rowlab,collab,Jprows,Jpcols,numjunpairs::Int,Sprows,Spcols,numsenpairs::Int,
         comprows,compcols,Trv,Tcp,Srv,Scp)
-    println("schurit4!")
-    @time begin
     Mm0 = Mm
     Mm = length(comprows)
     Mn = length(compcols)
 
-    copycolind2colind!(Trv,Tcp,Jpcols[numjunpairs:-1:1],Srv,Scp,numsenpairs+1,0)
+    copycolind2colind!(Trv, Tcp, Jpcols[numjunpairs:-1:1], Srv, Scp, numsenpairs+1, 0)
 
     Sprows[numsenpairs .+ (1:numjunpairs)] .= rowlab[view(Jprows, numjunpairs:-1:1)]
     Spcols[numsenpairs .+ (1:numjunpairs)] .= collab[view(Jpcols, numjunpairs:-1:1)]
@@ -139,7 +137,6 @@ function schurit4!(Mrv::Vector{Int},Mcp::Vector{Int},Mm::Int,Mn::Int,Mn0::Int,
         end
     end
     blockprodsumsilenticolsleftWrite2!(Lrv,Lcp,Brv,Bcp,Rrv,Rcp,Mn0,Mn,Trv,Tcp,0,translator)
-    end
     Mm, Mn, numsenpairs
 end
 

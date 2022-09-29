@@ -77,13 +77,15 @@ function eirene(pointcloud::Matrix{Float64}, maxdim::Int; minrad=-Inf, maxrad=In
     noFiltVerts = findall(diag(t) .!= 0)
     t = t[noFiltVerts, noFiltVerts]
 
+    println("C")
     #### Build the complex
-    C = buildcomplex3(t, maxdim+2)
+    @time C = buildcomplex3(t, maxdim+2)
     # this covers the case where some vertices never enter the filtration
     nvl2ovl = noFiltVerts[C.nvl2ovl]
     
+    println("P")
     #### Compute persistence
-    P = persistf2(C.farfaces, C.firstv, C.prepairs, C.grain)
+    @time P = persistf2(C.farfaces, C.firstv, C.prepairs, C.grain)
     
     #### Store generators
     R = unpack!(C.grain, C.farfaces, C.firstv, P.trv, P.tcp, P.plo, P.phi, P.tid, maxdim+2)
@@ -163,17 +165,17 @@ fnames = readdir(expanduser("~/protTDA/data/GASS/xyzChain"); join=true);
 dfs = CSV.read.(fnames, DataFrame; types=Dict(:x=>Float64, :y=>Float64, :z=>Float64));
 xyzs = [Matrix{Float64}(df[!, [:x, :y, :z]]) for df in dfs];
 
-for xyz in xyzs[1:8]
-    println("hej")
+@time for xyz in xyzs[7:8]
+    println("file")
     @time Eirene.eirene(xyz, 2; minrad=0.);
 end
 
-@threads for (fname, xyz) in zip(basename.(fnames), xyzs[1:4]) |> collect
-    @time bs, rs = Eirene.eirene(xyz, 2; minrad=0.)
-  
-    open("lars/$fname", "w") do io
-        obj = Dict("H$i" => (barcode=b, representatives=r) for (i,(b,r)) ∈ enumerate(zip(bs, rs)))
-        JSON.print(io, obj)
-    end
-end
+# @threads for (fname, xyz) in zip(basename.(fnames), xyzs[1:4]) |> collect
+#     @time bs, rs = Eirene.eirene(xyz, 2; minrad=0.)
+#  
+#     open("lars/$fname", "w") do io
+#         obj = Dict("H$i" => (barcode=b, representatives=r) for (i,(b,r)) ∈ enumerate(zip(bs, rs)))
+#         JSON.print(io, obj)
+#     end
+# end
 

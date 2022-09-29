@@ -30,7 +30,7 @@ function persistf2(farfaces::Vector{Vector{Int}}, firstv::Vector{Vector{Int}},
         # NB: It is critical that the columns of the input array
         # be ordered according to filtration; in particular, the entries of
         # lowfiltemp should increase monotonically
-        Srv,Scp,Sphigs,Splows,tlab,maxnz =
+        Srv, Scp, Sphigs, Splows, tlab, maxnz =
         morselu!(Mrv, higfilttemp, Mcp, lowfilttemp, 
                  1:length(lowlab), 
                  1:length(higlab),
@@ -99,18 +99,17 @@ function morselu!(Mrv::Vector{Int}, Mrowgrain::Vector{Int}, Mcp::Vector{Int},
     end
     lastSrowmarker = Scp[numsenpairs+1]-1
     lastTrowmarker = Tcp[Mn+1]-1
-    deleteat!(Srv,(lastSrowmarker+1):length(Srv))
-    deleteat!(Trv,(lastTrowmarker+1):length(Trv))
-    deleteat!(Scp,(numsenpairs+1):length(Scp))
-    deleteat!(Tcp,(Mn+2):length(Tcp))
-    deleteat!(Sprows,(numsenpairs+1):maxnumpairs)
-    deleteat!(Spcols,(numsenpairs+1):maxnumpairs)
+    deleteat!(Srv, lastSrowmarker+1:length(Srv))
+    deleteat!(Trv, lastTrowmarker+1:length(Trv))
+    deleteat!(Scp, numsenpairs+1:length(Scp))
+    deleteat!(Tcp, Mn+2:length(Tcp))
+    deleteat!(Sprows, numsenpairs+1:maxnumpairs)
+    deleteat!(Spcols, numsenpairs+1:maxnumpairs)
     Tcp .+= lastSrowmarker
     append!(Scp, Tcp)
-    append!(Srv, Trv[1:lastTrowmarker])
-    tlab = Spcols[1:numsenpairs]
-    append!(tlab, collab[1:Mn])
-    Srv,Scp,Sprows,Spcols,tlab,maxnz
+    append!(Srv, view(Trv, 1:lastTrowmarker))
+    tlab = [Spcols; view(collab, 1:Mn)]
+    Srv, Scp, Sprows, Spcols, tlab, maxnz
 end
 
 function getPairsLightWrite2!(rowval::Vector{Int}, colptr::Vector{Int},

@@ -106,13 +106,13 @@ function buildcomplex3(symmat::Matrix{Int}, maxsd::Int)
                 dij = symmat[j,i]
                 dij == 0 && continue
                 if sd < maxsd-1
-                    for k = cran(jcp,j)
+                    for k = cran(jcp, j)
                         kk = jrv[k]
                         if izfull[kk] > 0
                             farfilt = jz[k]
                             claw = min(izfull[kk],dij)
                             push!(r, k)
-                            push!(z, min(farfilt,claw))
+                            push!(z, min(farfilt, claw))
                             if claw >= farfilt && npsupp[k]
                                 numpairs += 1
                                 pflist[numpairs] = length(r)
@@ -121,18 +121,18 @@ function buildcomplex3(symmat::Matrix{Int}, maxsd::Int)
                         end
                     end
                 elseif sd == maxsd-1
-                    for k = cran(jcp,j)
+                    for k = cran(jcp, j)
                         kk = jrv[k]
                         if izfull[kk] > 0
                             farfilt = jz[k]
                             claw = min(izfull[kk],dij)
                             push!(r, k)
-                            push!(z, min(farfilt,claw))
+                            push!(z, min(farfilt, claw))
                             if claw >= farfilt && npsupp[k]
                                 numpairs += 1
                                 pmhist[i,j] += 1
-                                npsupp[k] = false
                                 pflist[numpairs] = length(r)
+                                npsupp[k] = false
                                 ff2pv[k] = i
                             end
                         end
@@ -252,7 +252,7 @@ function buildcomplex3(symmat::Matrix{Int}, maxsd::Int)
             end
             # update the column pattern and the total number of nonzeros
             # encountered per codim2 face
-            c[i+1] = length(r)+1
+            c[i+1] = length(r) + 1
             if sd == maxsd
                 colsum[jrv[cran(jcp,i)]] .+= 1
             end
