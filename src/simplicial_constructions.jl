@@ -1,8 +1,8 @@
 #!/usr/bin/env julia
 
-ocff2of(grain::Array{Int}, ocg2rad::Array{Int}) = ocg2rad[grain]
-ocff2of(grain::Array{Int}, ocg2rad::Array{Float64}) = ocg2rad[grain]
-function ocff2of(grain::Array{Array{Int,1},1}, ocg2rad::Array{Float64})
+ocff2of(grain::Vector{Int}, ocg2rad::Vector{Int}) = ocg2rad[grain]
+ocff2of(grain::Vector{Int}, ocg2rad::Vector{Float64}) = ocg2rad[grain]
+function ocff2of(grain::Vector{Vector{Int}}, ocg2rad::Vector{Float64})
     [ocg2rad[g] for g in grain]
 end
 
@@ -11,27 +11,26 @@ NB: eirene permutes vertex labels prior to calculation;
 all versions of <vertexrealization> must be interpreted with
 respect to the PERMUTED labeling scheme
 """
-function vertexrealization(farfaces, firstv, facecardinality::Int, facenames)
+function vertexrealization(farfaces::Vector{Vector{Int}}, firstv::Vector{Vector{Int}}, facecardinality::Int, facenames::Vector{Int})::Matrix{Int}
     numfaces = length(facenames)
     m = length(firstv[2]) - 1
-    preallocationspace = 0
-    loci::Array{Int,1} = copy(facenames)
-    vrealization = Array{Int}(undef,facecardinality,numfaces)
-    post0::Int = 1
-    post1::Int = 1
+    loci = copy(facenames)
+    vrealization = Matrix{Int}(undef, facecardinality, numfaces)
+    post0 = 1
+    post1 = 1
 
     for sd = facecardinality:-1:1
-        cp::Array{Int,1} = firstv[sd]
+        cp = firstv[sd]
         for i = 1:numfaces
             locus = loci[i]
             if cp[post0] > locus
                 while cp[post0] > locus
-                    post0-=1
+                    post0 -= 1
                 end
-                post1 = post0+1
+                post1 = post0 + 1
             elseif cp[post1] <= locus
                 while cp[post1] <= locus
-                    post1+=1
+                    post1 += 1
                 end
                 post0 = post1-1
             end
@@ -39,82 +38,27 @@ function vertexrealization(farfaces, firstv, facecardinality::Int, facenames)
             vrealization[sd,i] = post0
         end
     end
-    return vrealization
+    vrealization
 end
 
-"""
-NB: eirene permutes vertex labels prior to calculation;
-the output of <incidentverts> must be interpreted with respect
-to the PERMUTED labeling scheme
-"""
-function incidentverts(farfaces, firstv, facecardinality, facenames)
-    numfaces::Int = length(facenames)
-    m::Int = length(firstv[2]) - 1
-    preallocationspace = 0
-    vsupp = falses(m)
-    loci::Array{Int,1} = copy(facenames)
-    post0::Int = 1
-    post1::Int = 1
-    for sd = facecardinality:-1:1
-        cp::Array{Int,1} = firstv[sd]
-        for i = 1:numfaces
-            locus = loci[i]
-            if cp[post0] > locus
-                while cp[post0] > locus
-                    post0-=1
-                end
-                post1 = post0+1
-            elseif cp[post1] <= locus
-                while cp[post1] <= locus
-                    post1+=1
-                end
-                post0 = post1-1
-            end
-            loci[i] = farfaces[sd][locus]
-            vsupp[post0] = true
-        end
-    end
-    return findall(vsupp)
-end
-
-"""
-NB: eirene permutes vertex labels prior to calculation;
-the output of <incidentverts> must be interpreted with respect
-to the PERMUTED labeling scheme
-"""
-function incidentverts(D::Dict; dim::Int=1, class::Int=1)
-    facecardinality = dim+1
-
-    if haskey(D,"cyclerep")
-        rep = D["cyclerep"][dim+2][class]
-    else
-        cyclename = barname2cyclename(grain, plo, phi, tid, class; dim=dim)
-        rep = getcycle(D, facecardinality, class)
-    end
-    return incidentverts(D, facecardinality, rep)
-end
-
-function buildclosefromclose(lrowval,lcolptr,lclosefaces,hrowval,hcolptr;facecard = size(lclosefaces,1)+1)
-    m = length(hcolptr)-1
+function buildclosefromclose(lrowval::Vector{Int}, lcolptr, lclosefaces, hrowval, hcolptr; facecard::Int=size(lclosefaces,1)+1)
+    m = length(hcolptr) - 1
     n = length(hrowval)
-    hclosefaces = Array{Int}(undef,facecard,n)
-    if n == 0
-        return hclosefaces
-    else
-        rowdepth = facecard-1
-        rosettacol = Array{Int}(undef,maximum(lrowval))
-        for i = 1:m
-            rosettacol[lrowval[cran(lcolptr,i)]]=cran(lcolptr,i)
-            for j = cran(hcolptr,i)
-                farface = hrowval[j]
-                for k = 1:rowdepth
-                    hclosefaces[k,j]=rosettacol[lclosefaces[k,farface]]
-                end
-                hclosefaces[facecard,j] = rosettacol[lrowval[farface]]
+    hclosefaces = Matrix{Int}(undef, facecard, n)
+    n == 0 && return hclosefaces
+    rowdepth = facecard - 1
+    rosettacol = Vector{Int}(undef, maximum(lrowval))
+    for i = 1:m
+        rosettacol[lrowval[cran(lcolptr,i)]]=cran(lcolptr,i)
+        for j = cran(hcolptr,i)
+            farface = hrowval[j]
+            for k = 1:rowdepth
+                hclosefaces[k,j] = rosettacol[lclosefaces[k,farface]]
             end
+            hclosefaces[facecard,j] = rosettacol[lrowval[farface]]
         end
-        return hclosefaces
     end
+    hclosefaces
 end
 
 """
@@ -126,10 +70,8 @@ function buildallfromclose(lrowval,lcolptr,lclosefaces,hrowval,hcolptr,selectedc
     numselected = length(selectedcolumnindices)
     rowdepth = size(lclosefaces,1)
     sd = rowdepth+1
-    hclosefaces = Array{Int}(undef,sd+1,numselected)
-    if numselected == 0
-        return hclosefaces
-    end
+    hclosefaces = Matrix{Int}(undef, sd+1, numselected)
+    numselected == 0 && return hclosefaces
     rosettacol = Array{Int}(undef,maximum(lrowval))
     columnsupp = falses(numhigs)
     columnsupp[selectedcolumnindices].=true
@@ -148,167 +90,140 @@ function buildallfromclose(lrowval,lcolptr,lclosefaces,hrowval,hcolptr,selectedc
             end
         end
     end
-    return hclosefaces
+    hclosefaces
 end
 
-function buildclosefromfar(farfaces,firstv,sd)
-    m = length(firstv[1])-1
+function buildclosefromfar(farfaces, firstv, sd, columnsinorder)::Matrix{Int}
+    m = length(firstv[1]) - 1
     n = length(farfaces[sd])
-    # destinationmatrix = Array{Int}(undef,sd,n)
-    if sd == 1
-        return Array{Int}(undef,0,m)
-    end
-    lclosefaces = Array{Int}(undef,1,firstv[2][end]-1)
+    sd == 1 && return Matrix{Int}(undef,0,m)
+    lclosefaces = Matrix{Int}(undef, 1, firstv[2][end]-1)
     for i = 1:m
-        lclosefaces[cran(firstv[2],i)]=i
+        lclosefaces[cran(firstv[2],i)] .= i
     end
-    if sd == 2
-        return lclosefaces'
-    end
-    for i = 3:sd
-        lclosefaces = buildclosefromclose(farfaces[i-1],firstv[i-1],lclosefaces,farfaces[i],firstv[i];facecard=i-1)
-    end
-    return lclosefaces
-end
-
-function buildclosefromfar(farfaces,firstv,sd,columnsinorder)
-    m = length(firstv[1])-1
-    n = length(farfaces[sd])
-    if sd == 1
-        return Array{Int}(undef,0,m)
-    end
-    lclosefaces = Array{Int}(undef,1,firstv[2][end]-1)
-    for i = 1:m
-        lclosefaces[cran(firstv[2],i)].=i
-    end
-    if sd == 2
-        return lclosefaces[columnsinorder]'
-    end
-    for i = 3:(sd-1)
+    sd == 2 && return lclosefaces[columnsinorder]'
+    for i = 3:sd-1
         lclosefaces = buildclosefromclose(farfaces[i-1],firstv[i-1],lclosefaces,farfaces[i],firstv[i];facecard=i-1)
     end
     lclosefaces = buildclosefromclose(farfaces[sd-1],firstv[sd-1],lclosefaces,farfaces[sd],firstv[sd],columnsinorder;facecard = sd-1)
-    return lclosefaces
 end
 
-function buildallfromfar(farfaces,firstv,sd,columnsinorder)
+function buildallfromfar(farfaces,firstv,sd,columnsinorder)::Matrix{Int}
     m = length(firstv[1])-1
     n = length(farfaces[sd])
-    # destinationmatrix = Array{Int}(undef,sd,n)
     if sd == 1
-        return Array{Int}(undef,0,m)
+        return Matrix{Int}(undef,0,m)
     end
-    lclosefaces = Array{Int}(undef,1,firstv[2][end]-1)
+    lclosefaces = Matrix{Int}(undef, 1, firstv[2][end]-1)
     for i = 1:m
-        lclosefaces[cran(firstv[2],i)].=i
+        lclosefaces[cran(firstv[2],i)] .= i
     end
     if sd == 2
-        return vcat(lclosefaces[columnsinorder]',farfaces[sd][columnsinorder]')
+        return vcat(lclosefaces[columnsinorder]', farfaces[sd][columnsinorder]')
     end
     for i = 3:(sd-1)
         lclosefaces = buildclosefromclose(farfaces[i-1],firstv[i-1],lclosefaces,farfaces[i],firstv[i];facecard=i-1)
-        #gc()
     end
     lclosefaces = buildallfromclose(farfaces[sd-1],firstv[sd-1],lclosefaces,farfaces[sd],firstv[sd],columnsinorder)
-    #gc()
-    return lclosefaces
 end
 
-function ff2aflight_sc2(farfaces,firstv,columns)
+function ff2aflight_sc2(farfaces::Vector{Vector{Int}}, firstv::Vector{Vector{Int}}, columns)
     sd = 2
-    isempty(farfaces[sd]) && return Array{Int}(undef,2,0)
+    isempty(farfaces[sd]) && return Matrix{Int}(undef,2,0)
     
-    f0faces::Array{Int,1} = farfaces[sd]
-    colptr::Array{Int,1} = firstv[2]
-    columnpost::Int   = 1
-    columnpostp1::Int = 2
-    faces::Array{Int,2} = Array{Int}(undef,2,length(columns))
+    f0faces = farfaces[sd]
+    colptr = firstv[2]
+    columnpost = 1
+    columnpostp1 = 2
+    faces = Matrix{Int}(undef, 2, length(columns))
 
     for fp = 1:length(columns)
         f0 = columns[fp]
         if f0 >= colptr[columnpostp1]
             while f0 >= colptr[columnpostp1]
-                columnpostp1+=1
+                columnpostp1 += 1
             end
-            columnpost = columnpostp1-1
+            columnpost = columnpostp1 - 1
         elseif f0 < colptr[columnpost]
             while f0 < colptr[columnpost]
-                columnpost-=1
+                columnpost -= 1
             end
-            columnpostp1 = columnpost+1
+            columnpostp1 = columnpost + 1
         end
         faces[1,fp] = columnpost
         faces[2,fp] = f0faces[f0]
     end
-    return faces
+    faces
 end
 
-function ff2aflight_sc3(farfaces,firstv,columns)
+function ff2aflight_sc3(farfaces::Vector{Vector{Int}}, firstv::Vector{Vector{Int}}, columns)
     sd = 3
     isempty(farfaces[sd]) && return Array{Int}(undef,3,0)
 
-    fcfaces::Array{Int,2} = buildclosefromfar(farfaces,firstv,sd-1,1:length(farfaces[2]))
+    fcfaces = buildclosefromfar(farfaces, firstv, sd-1, 1:length(farfaces[2]))
 
-    f0faces::Array{Int,1} = farfaces[sd]
-    f1faces::Array{Int,1} = farfaces[sd-1]
+    f0faces = farfaces[sd]
+    f1faces = farfaces[sd-1]
 
-    fvscm0::Array{Int,1}  = firstv[sd]
-    fvscm1::Array{Int,1}  = firstv[sd-1]
-    fvscm2::Array{Int,1}  = firstv[sd-2]
+    fvscm0  = firstv[sd]
+    fvscm1  = firstv[sd-1]
+    fvscm2  = firstv[sd-2]
 
-    holdi=[1];holdip1=[2]
-    t1::Array{Int,1} = Array{Int}(undef,fvscm2[end]-1);t1[crows(fvscm1,f1faces,1)]=cran(fvscm1,1)
+    holdi = [1]
+    holdip1 = [2]
+    t1 = Vector{Int}(undef, fvscm2[end]-1)
+    t1[crows(fvscm1,f1faces,1)] = cran(fvscm1,1)
 
-    faces::Array{Int,2} = Array{Int}(undef,3,length(columns))
+    faces = Matrix{Int}(undef, 3, length(columns))
     for fp = 1:length(columns)
         f0 = columns[fp]
         f1 = f0faces[f0]
         f2 = f1faces[f1]
         f3 = fcfaces[f1]
-        updatetranslator!(f0::Int,fvscm0::Array{Int,1} ,holdi::Array{Int,1},holdip1::Array{Int,1},t1::Array{Int,1},fvscm1::Array{Int,1},f1faces::Array{Int,1})
+        updatetranslator!(f0,fvscm0, holdi, holdip1, t1, fvscm1, f1faces)
         faces[1,fp] = t1[f3]
         faces[2,fp] = t1[f2]
         faces[3,fp] = f1
     end
-    return faces
+    faces
 end
 
-function ff2aflight_scgt3(farfaces,firstv,sd,columns)
-    isempty(farfaces[sd]) && return Array{Int}(undef,sd,0)
+function ff2aflight_scgt3(farfaces::Vector{Vector{Int}}, firstv::Vector{Vector{Int}}, sd::Int, columns)
+    isempty(farfaces[sd]) && return Matrix{Int}(undef, sd, 0)
 
-    f0faces::Array{Int,1} = farfaces[sd]
-    f1faces::Array{Int,1} = farfaces[sd-1]
-    f2faces::Array{Int,1} = farfaces[sd-2]
-    fcfaces::Array{Int,2} = buildallfromfar(farfaces,firstv,sd-2,1:(firstv[sd-2][end]-1))
+    f0faces = farfaces[sd]
+    f1faces = farfaces[sd-1]
+    f2faces = farfaces[sd-2]
+    fcfaces = buildallfromfar(farfaces,firstv,sd-2,1:(firstv[sd-2][end]-1))::Matrix{Int}
 
-    fvscm0::Array{Int,1}  = firstv[sd]
-    fvscm1::Array{Int,1}  = firstv[sd-1]
-    fvscm2::Array{Int,1}  = firstv[sd-2]
-    fvscm3::Array{Int,1}  = firstv[sd-3]
+    fvscm0 = firstv[sd]
+    fvscm1 = firstv[sd-1]
+    fvscm2 = firstv[sd-2]
+    fvscm3 = firstv[sd-3]
 
     holdi=[1];holdip1=[2];holdj=[1];holdjp1=[2]
-    t1::Array{Int,1} = Array{Int}(undef,fvscm2[end]-1);t1[crows(fvscm1,f1faces,1)]=cran(fvscm1,1)
-    t2::Array{Int,1} = Array{Int}(undef,fvscm3[end]-1);t2[crows(fvscm2,f2faces,1)]=cran(fvscm2,1)
+    t1 = Vector{Int}(undef,fvscm2[end]-1)
+    t1[crows(fvscm1,f1faces,1)]=cran(fvscm1,1)
+    t2 = Vector{Int}(undef,fvscm3[end]-1)
+    t2[crows(fvscm2,f2faces,1)]=cran(fvscm2,1)
 
-    scm0::Int = sd; scm1::Int = sd-1; scm2::Int = sd-2
-    faces::Array{Int,2} = Array{Int}(undef,sd,length(columns))
-
+    faces = Matrix{Int}(undef, sd, length(columns))
     for fp = 1:length(columns)
         f0 = columns[fp]
         f1 = f0faces[f0]
         f2 = f1faces[f1]
-        updatetranslator!(f0::Int,fvscm0::Array{Int,1},holdi::Array{Int,1},holdip1::Array{Int,1},t1::Array{Int,1},fvscm1::Array{Int,1},f1faces::Array{Int,1})
-        updatetranslator!(f1::Int,fvscm1::Array{Int,1},holdj::Array{Int,1},holdjp1::Array{Int,1},t2::Array{Int,1},fvscm2::Array{Int,1},f2faces::Array{Int,1})
-        for i = 1:scm2
+        updatetranslator!(f0,fvscm0,holdi,holdip1,t1,fvscm1,f1faces)
+        updatetranslator!(f1,fvscm1,holdj,holdjp1,t2,fvscm2,f2faces)
+        for i = 1:sd-2
             faces[i,fp] = t1[t2[fcfaces[i,f2]]]
         end
-        faces[scm1,fp] = t1[f2]
-        faces[scm0,fp] = f1
+        faces[sd-1, fp] = t1[f2]
+        faces[sd, fp] = f1
     end
     faces
 end
 
-function updatetranslator!(f0,firstv0,holdi,holdip1,t,firstv1,farfaces1)
+function updatetranslator!(f0::Int, firstv0::Vector{Int}, holdi::Vector{Int}, holdip1::Vector{Int}, t::Vector{Int}, firstv1::Vector{Int}, farfaces1::Vector{Int})
     if firstv0[holdip1[1]] <= f0
         while firstv0[holdip1[1]] <= f0
             holdip1[1]+=1
@@ -327,7 +242,7 @@ end
 
 function ff2aflight(farfaces, firstv, sd, columns)
     if sd == 1
-        return Array{Int}(undef,0,length(columns))
+        return Matrix{Int}(undef, 0, length(columns))
     elseif sd == 2
         return ff2aflight_sc2(farfaces,firstv,columns)
     elseif sd == 3
@@ -335,12 +250,6 @@ function ff2aflight(farfaces, firstv, sd, columns)
     else
         return ff2aflight_scgt3(farfaces,firstv,sd,columns)
     end
-end
-
-function ff2aflight(D::Dict, sd, columns)
-    farfaces = D["farfaces"]; firstv = D["firstv"]
-    faces = ff2aflight(farfaces,firstv,sd,columns)
-    return faces
 end
 
 """
@@ -359,24 +268,22 @@ Sparse matrix representation of transpose(D[lowlab,higlab]), where D is
 submatrix of the total boundary operator indexed by cells of dimension sd-1
 (along the columns) and sd-2 (along the rows).
 """
-function filteredmatrixfromfarfaces(farfaces, firstv, prepairs, grain, sd::Integer, lowbasisnames::Array{Int,1})
+function filteredmatrixfromfarfaces(farfaces, firstv, prepairs, grain, sd::Int, lowbasisnames::Vector{Int})
     numhigs = length(farfaces[sd])
     numlows = length(farfaces[sd-1])
-    numppair= length(prepairs[sd])
+    numppair = length(prepairs[sd])
 
     pphigs = prepairs[sd]
     pplows = farfaces[sd][pphigs]
     lpls = lowbasisnames
     hphs = farfaces[sd+1][prepairs[sd+1]]
-    nplows = intervalcomplementuniqueunsortedinput(vcat(lpls,pplows),numlows)
-    nphigs = intervalcomplementuniqueunsortedinput(vcat(hphs,pphigs),numhigs)
+    nplows = intervalcomplementuniqueunsortedinput(vcat(lpls,pplows), numlows)
+    nphigs = intervalcomplementuniqueunsortedinput(vcat(hphs,pphigs), numhigs)
 
-    numnhph = numhigs-length(hphs)
-    Ml = numlows - length(lpls)
-    Mh = numhigs - length(hphs)
+    numnhph = numhigs - length(hphs)
 
-    higtranslator = zeros(Int,numnhph)
-    lowtranslator = zeros(Int,numlows)
+    higtranslator = zeros(Int, numnhph)
+    lowtranslator = zeros(Int, numlows)
     lowtranslator[pplows] = 1:numppair
 
     if sd > 1
@@ -384,59 +291,45 @@ function filteredmatrixfromfarfaces(farfaces, firstv, prepairs, grain, sd::Integ
         nporder = integersinsameorder(npfilt)
         nporder .+= numppair
     else
-        npfilt = zeros(Int,0)
-        nporder =	zeros(Int,0)
+        npfilt = zeros(Int, 0)
+        nporder = zeros(Int, 0)
     end
 
     lowtranslator[nplows] = nporder
     higsinpointorder = intervalcomplementuniqueunsortedinput(hphs,numhigs)
-    lowlab = Array{Int}(undef,Ml)
-    lowlab[1:numppair]=pplows
-    lowlab[nporder]=nplows
+    lowlab = Vector{Int}(undef, numlows - length(lpls))
+    lowlab[1:numppair] = pplows
+    lowlab[nporder] = nplows
     higlab = vcat(pphigs,nphigs)
 
     ppsupp = falses(numhigs)
-    ppsupp[pphigs].=true
+    ppsupp[pphigs] .= true
     ppmarker = 0
     nppmarker = numppair
     for i = 1:numnhph
         hig = higsinpointorder[i]
         if ppsupp[hig]
-            ppmarker+=1
-            higtranslator[i]=ppmarker
+            ppmarker += 1
+            higtranslator[i] = ppmarker
         else
-            nppmarker+=1
-            higtranslator[i]=nppmarker
+            nppmarker += 1
+            higtranslator[i] = nppmarker
         end
     end
     allfaces = buildallfromfar(farfaces,firstv,sd,higsinpointorder)
-    Mrv,Mcp,Mm = presparsefull2unsortedsparsetranspose(allfaces,lowtranslator,higtranslator)
-    higtranslator = [];npfilt = [];ppsupp = [];allfaces = []
-    #gc()
-    return Mrv,Mcp,lowlab,higlab,Mm
+    Mrv, Mcp, Mm = presparsefull2unsortedsparsetranspose(allfaces, lowtranslator, higtranslator)
+    return Mrv, Mcp, lowlab, higlab, Mm
 end
 
-function intervalcomplementuniqueunsortedinput(uniquepositiveintegers,intervalEndpoint)
-	v = uniquepositiveintegers
-	n = intervalEndpoint
-	L = length(v)
-	if L==0
-		return 1:n
-	elseif L==n
-		return Array{Int64}(undef,0)
-	else
-		complementsupport = trues(n)
-		complementsupport[v] .= false
-		complement = Array{Int64}(undef,n-L)
-		marker = 0
-		for i = 1:n
-			if complementsupport[i]
-				marker+=1
-				complement[marker]=i
-			end
-		end
-	end
-	return complement
+"""
+Get the values in range 1:n not found in v.
+- v: unique positive integers
+- n: interval endpoint
+"""
+function intervalcomplementuniqueunsortedinput(v::Vector{Int}, n::Int)
+    complementsupport = trues(n)
+    complementsupport[v] .= false
+    findall(complementsupport)
 end
 
 

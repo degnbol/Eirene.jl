@@ -1,21 +1,22 @@
 #!/usr/bin/env julia
 
-function morseInverseF2orderedColsUnsortedRowsInSilentOut(Arowval::Array{Tv,1},Acolptr::Array{Tv,1}) where Tv<:Integer
+function morseInverseF2orderedColsUnsortedRowsInSilentOut(Arowval::Vector{Int},Acolptr::Vector{Int})
     mA = length(Acolptr)-1
     colptrA = Acolptr
     rowvalA = Arowval
     preallocationIncrement = colptrA[end]
 
-    colptrC = Array{Tv}(undef,mA+1); colptrC[1]=1
-    rowSupp = zeros(Tv, mA)
-    rowList = Array{Tv}(undef,mA)
-    rowvalCj = Array{Bool}(undef,mA)
-    rowvalC = Array{Tv}(undef,mA)
+    colptrC = Vector{Int}(undef, mA+1)
+    colptrC[1] = 1
+    rowSupp = zeros(Int, mA)
+    rowList = Vector{Int}(undef, mA)
+    rowvalCj = Vector{Bool}(undef, mA)
+    rowvalC = Vector{Int}(undef, mA)
     totalrowscounter = 0
     onepast = 0
     for i in 1:mA
-        if colptrC[i]+mA > length(rowvalC)+1
-            append!(rowvalC, Array{Int}(undef,preallocationIncrement))
+        if colptrC[i]+mA > length(rowvalC) + 1
+            append!(rowvalC, Vector{Int}(undef, preallocationIncrement))
         end
         if colptrA[i]+1 == colptrA[i+1]
             colptrC[i+1] = colptrC[i]
@@ -36,9 +37,10 @@ function morseInverseF2orderedColsUnsortedRowsInSilentOut(Arowval::Array{Tv,1},A
                 ll = Arowval[eyerange[l]]
                 rowList[l] = ll
                 rowSupp[ll] = i
-                rowvalCj[ll]=true
+                rowvalCj[ll] = true
             end
-            rowvalCj[i] = false ## note we have to make this correction
+            # note we have to make this correction
+            rowvalCj[i] = false
             for jp in eyerange
                 j = rowvalA[jp]
                 if j < i
@@ -70,17 +72,17 @@ function morseInverseF2orderedColsUnsortedRowsInSilentOut(Arowval::Array{Tv,1},A
     return rowvalC, colptrC
 end
 
-function morseInverseF2orderedColsUnsortedRowsSilentInSilentOut(Arowval::Array{Tv,1},Acolptr::Array{Tv,1}) where Tv<:Integer
+function morseInverseF2orderedColsUnsortedRowsSilentInSilentOut(Arowval::Vector{Int}, Acolptr::Vector{Int})
     mA = length(Acolptr)-1
     colptrA = Acolptr
     rowvalA = Arowval
     preallocationIncrement = colptrA[end]
 
-    colptrC = Array{Tv}(undef,mA+1); colptrC[1]=1
-    rowSupp = zeros(Tv, mA)
-    rowList = Array{Tv}(undef,mA)
+    colptrC = Array{Int}(undef,mA+1); colptrC[1]=1
+    rowSupp = zeros(Int, mA)
+    rowList = Array{Int}(undef,mA)
     rowvalCj = Array{Bool}(undef,mA)
-    rowvalC = Array{Tv}(undef,mA)
+    rowvalC = Array{Int}(undef,mA)
     totalrowscounter = 0
     onepast = 0
     for i in 1:mA

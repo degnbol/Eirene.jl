@@ -108,8 +108,8 @@ function buildcomplex3(symmat::Matrix{Int}, maxsd::Int)
                 if sd < maxsd-1
                     for k = cran(jcp,j)
                         kk = jrv[k]
-                        farfilt = jz[k]
                         if izfull[kk] > 0
+                            farfilt = jz[k]
                             claw = min(izfull[kk],dij)
                             push!(r, k)
                             push!(z, min(farfilt,claw))
@@ -123,8 +123,8 @@ function buildcomplex3(symmat::Matrix{Int}, maxsd::Int)
                 elseif sd == maxsd-1
                     for k = cran(jcp,j)
                         kk = jrv[k]
-                        farfilt = jz[k]
                         if izfull[kk] > 0
+                            farfilt = jz[k]
                             claw = min(izfull[kk],dij)
                             push!(r, k)
                             push!(z, min(farfilt,claw))
@@ -143,7 +143,7 @@ function buildcomplex3(symmat::Matrix{Int}, maxsd::Int)
                         if fpi[l,j] < fpi[l+1,j]
                             ocl = oldclaw[l]
                             if ocl < dij
-                                for k = fpi[l,j]:(fpi[l+1,j]-1)
+                                for k = fpi[l,j]:fpi[l+1,j]-1
                                     ## may have to reindex this
                                     kk = jrv[k]
                                     farfilt = jz[k]
@@ -175,7 +175,7 @@ function buildcomplex3(symmat::Matrix{Int}, maxsd::Int)
                         end
                     end
 
-                    for k = fpi[i,j]:(fpi[i+1,j]-1)
+                    for k = fpi[i,j]:fpi[i+1,j]-1
                         kk = jrv[k]
                         farfilt = jz[k]
                         if dij >= farfilt && npsupp[k]
@@ -278,7 +278,7 @@ function buildcomplex3(symmat::Matrix{Int}, maxsd::Int)
 end
 
 
-function saveface(ct::Array{Int,1},kk::Int,colsum::Array{Int,1},farfilt::Int,oldclaw::Array{Int,1},rt::Array{Int,1},zt::Array{Int,1})
+function saveface(ct::Vector{Int},kk::Int,colsum::Vector{Int},farfilt::Int,oldclaw::Vector{Int},rt::Vector{Int},zt::Vector{Int})
     for l = ct[kk]:colsum[kk]
         if zt[l] >= farfilt && oldclaw[rt[l]] >= farfilt
             return false
@@ -309,9 +309,9 @@ function generate2faces(symmat::Matrix{Int})
 end
 
 function generate3faces!(farfaces_cell, firstv_cell, grain_cell, prepairs_cell, m, symmat)
-    grain::Array{Int,1} = grain_cell[2]
-    farfaces::Array{Int,1} = farfaces_cell[2]
-    firstv::Array{Int,1} = firstv_cell[2]
+    grain = grain_cell[2]::Vector{Int}
+    farfaces = farfaces_cell[2]::Vector{Int}
+    firstv = firstv_cell[2]::Vector{Int}
 
     numverts = length(firstv)-1
     numedges = length(farfaces)

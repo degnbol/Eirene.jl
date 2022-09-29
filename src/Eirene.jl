@@ -150,32 +150,30 @@ end
 
 # run an example to precompile typed versions of each function called
 eirene(rand(100, 3), 2; minrad=0)
+eirene(rand(400, 3), 2; minrad=0)
 
 end;
 
 
-# using CSV, DataFrames
-# using .Threads: @threads
-#
-# fnames = readdir(expanduser("~/protTDA/data/GASS/xyzChain"); join=true)
-# dfs = CSV.read.(fnames, DataFrame)
-#
-# xyzs = [Matrix(df[!, [:x, :y, :z]]) for df in dfs]
-#
-# for xyz in xyzs[1:8]
-#     @time Eirene.eirene(xyz, 2; minrad=0.);
-# end
+using CSV, DataFrames
+using .Threads: @threads
+using Profile
 
-# @time eirene.(pairwise.(Ref(Euclidean()), xyzs[1:8], dims=1); maxdim=2, minrad=0.);
-#
-#
-#
-# @time for (fname, xyz) in zip(basename.(fnames), xyzs[1:4])
-#     bs, rs = Eirene.eirene(xyz, 2; minrad=0.)
-#    
-#     open("lars/$fname", "w") do io
-#         obj = Dict("H$i" => (barcode=b, representatives=r) for (i,(b,r)) ∈ enumerate(zip(bs, rs)))
-#         JSON.print(io, obj)
-#     end
-# end
+fnames = readdir(expanduser("~/protTDA/data/GASS/xyzChain"); join=true);
+dfs = CSV.read.(fnames, DataFrame; types=Dict(:x=>Float64, :y=>Float64, :z=>Float64));
+xyzs = [Matrix{Float64}(df[!, [:x, :y, :z]]) for df in dfs];
+
+for xyz in xyzs[1:8]
+    println("hej")
+    @time Eirene.eirene(xyz, 2; minrad=0.);
+end
+
+@threads for (fname, xyz) in zip(basename.(fnames), xyzs[1:4]) |> collect
+    @time bs, rs = Eirene.eirene(xyz, 2; minrad=0.)
+  
+    open("lars/$fname", "w") do io
+        obj = Dict("H$i" => (barcode=b, representatives=r) for (i,(b,r)) ∈ enumerate(zip(bs, rs)))
+        JSON.print(io, obj)
+    end
+end
 
