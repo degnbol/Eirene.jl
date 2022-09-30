@@ -151,24 +151,33 @@ end
 
 
 # run an example to precompile typed versions of each function called
-eirene(rand(100, 3), 2; minrad=0)
-eirene(rand(400, 3), 2; minrad=0)
-
-end;
-
+# eirene(rand(100, 3), 2; minrad=0)
+# eirene(rand(400, 3), 2; minrad=0)
 
 using CSV, DataFrames
-using .Threads: @threads
-using Profile
-
 fnames = readdir(expanduser("~/protTDA/data/GASS/xyzChain"); join=true);
 dfs = CSV.read.(fnames, DataFrame; types=Dict(:x=>Float64, :y=>Float64, :z=>Float64));
 xyzs = [Matrix{Float64}(df[!, [:x, :y, :z]]) for df in dfs];
 
-@time for xyz in xyzs[7:8]
-    println("file")
-    @time Eirene.eirene(xyz, 2; minrad=0.);
-end
+bs, rs = Eirene.eirene(xyzs[1], 2; minrad=0.)
+
+using JSON
+d = JSON.parsefile(expanduser("~/protTDA/data/GASS/PHH2/1a16_A.json"))
+
+@assert all(hcat(d["barcode"]...) .≈ bs[1])
+@assert all(hcat(d["barcode_2"]...) .≈ bs[2])
+@assert all(reduce.(hcat, d["representatives"]) .== rs[1])
+@assert all(reduce.(hcat, d["representatives_2"]) .== rs[2])
+
+end;
+
+
+
+
+# @time for xyz in xyzs[7:8]
+#     println("file")
+#     @time Eirene.eirene(xyz, 2; minrad=0.);
+# end
 
 # @threads for (fname, xyz) in zip(basename.(fnames), xyzs[1:4]) |> collect
 #     @time bs, rs = Eirene.eirene(xyz, 2; minrad=0.)

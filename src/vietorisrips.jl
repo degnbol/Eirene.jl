@@ -78,12 +78,12 @@ function buildcomplex3(symmat::Matrix{Int}, maxsd::Int)
             pmhist = zeros(Int,m+1,m)
             fpi = zeros(Int,m+1,m)
             for p = 1:m
-                for q = jcp[p]:jcp[p+1]-1
-                    pmhist[ff2pv[jrv[q]],p]+=1
+                for q = jcp[p]:jcp[p+1] - 1
+                    pmhist[ff2pv[jrv[q]],p] += 1
                 end
             end
+            fpi[1,1:m] = jcp[1:m]
             for p = 1:m
-                fpi[1,p] = jcp[p]
                 for q = 1:m
                     fpi[q+1,p] = fpi[q,p]+pmhist[q,p]
                 end
@@ -105,52 +105,38 @@ function buildcomplex3(symmat::Matrix{Int}, maxsd::Int)
             for j = i+1:m
                 dij = symmat[j,i]
                 dij == 0 && continue
-                if sd < maxsd-1
-                    for k = cran(jcp, j)
-                        kk = jrv[k]
-                        if izfull[kk] > 0
-                            farfilt = jz[k]
-                            claw = min(izfull[kk],dij)
-                            push!(r, k)
-                            push!(z, min(farfilt, claw))
-                            if claw >= farfilt && npsupp[k]
-                                numpairs += 1
-                                pflist[numpairs] = length(r)
-                                npsupp[k] = false
-                            end
-                        end
-                    end
-                elseif sd == maxsd-1
-                    for k = cran(jcp, j)
-                        kk = jrv[k]
-                        if izfull[kk] > 0
-                            farfilt = jz[k]
-                            claw = min(izfull[kk],dij)
-                            push!(r, k)
-                            push!(z, min(farfilt, claw))
-                            if claw >= farfilt && npsupp[k]
-                                numpairs += 1
-                                pmhist[i,j] += 1
-                                pflist[numpairs] = length(r)
-                                npsupp[k] = false
-                                ff2pv[k] = i
-                            end
-                        end
+                if sd <= maxsd - 1
+                    k = cran(jcp, j)
+                    kk = jrv[k]
+                    if1 = izfull[kk] .> 0
+                    k = k[if1]
+                    kk = kk[if1]
+                    farfilt = jz[k]
+                    claw = min.(izfull[kk], dij)
+                    append!(r, k)
+                    append!(z, min.(farfilt, claw))
+                    if2 = (claw .>= farfilt) .& npsupp[k]
+                    pflist[numpairs .+ (1:sum(if2))] .= (length(r)-length(k)+1:length(r))[if2]
+                    npsupp[k[if2]] .= false
+                    numpairs += sum(if2)
+                    if sd == maxsd - 1
+                        pmhist[i, j] += sum(if2)
+                        ff2pv[k[if2]] .= i
                     end
                 else
-                    oldclaw[1:i-1] = minimum(symmat[1:i-1, [i,j]]; dims=2)
-                    for l = 1:(i-1)
-                        if fpi[l,j] < fpi[l+1,j]
+                    oldclaw[1:i-1] = minimum(symmat[1:i-1, [i, j]]; dims=2)
+                    for l = 1:i-1
+                        if fpi[l, j] < fpi[l+1, j]
                             ocl = oldclaw[l]
                             if ocl < dij
-                                for k = fpi[l,j]:fpi[l+1,j]-1
+                                for k = fpi[l, j]:fpi[l+1, j]-1
                                     ## may have to reindex this
                                     kk = jrv[k]
                                     farfilt = jz[k]
                                     if zll[kk] <= ocl
                                         break
-                                    elseif oldclaw[l] < min(farfilt,izfull[kk])
-                                        claw = min(izfull[kk],dij)
+                                    elseif oldclaw[l] < min(farfilt, izfull[kk])
+                                        claw = min(izfull[kk], dij)
                                         if claw >= farfilt
                                             if npsupp[k]
                                                 push!(r, k)
@@ -161,11 +147,11 @@ function buildcomplex3(symmat::Matrix{Int}, maxsd::Int)
                                                 ff2pv[k] = i
                                             elseif oldclaw[ff2pv[k]] >= farfilt
                                                 continue
-                                            elseif saveface(ct,kk,colsum,farfilt,oldclaw,rt,zt)
+                                            elseif saveface(ct, kk, colsum, farfilt, oldclaw, rt, zt)
                                                 push!(r, k)
                                                 push!(z, farfilt)
                                             end
-                                        elseif (claw>0) && saveface(ct,kk,colsum,claw,oldclaw,rt,zt)
+                                        elseif (claw > 0) && saveface(ct, kk, colsum, claw, oldclaw, rt, zt)
                                             push!(r, k)
                                             push!(z, claw)
                                         end
@@ -174,7 +160,7 @@ function buildcomplex3(symmat::Matrix{Int}, maxsd::Int)
                             end
                         end
                     end
-
+                
                     for k = fpi[i,j]:fpi[i+1,j]-1
                         kk = jrv[k]
                         farfilt = jz[k]
@@ -186,19 +172,19 @@ function buildcomplex3(symmat::Matrix{Int}, maxsd::Int)
                             npsupp[k] = false
                             ff2pv[k] = i
                         else
-                            farfilt = min(dij,farfilt)
-                            if saveface(ct,kk,colsum,farfilt,oldclaw,rt,zt)
+                            farfilt = min(dij, farfilt)
+                            if saveface(ct, kk, colsum, farfilt, oldclaw, rt, zt)
                                 push!(r, k)
                                 push!(z, farfilt)
                             end
                         end
                     end
-
-                    for k = fpi[i+1,j]:fpi[j,j]-1
+                
+                    for k = fpi[i+1, j]:fpi[j,j]-1
                         kk = jrv[k]
                         if izfull[kk] > 0
                             farfilt = jz[k]
-                            claw = min(izfull[kk],dij)
+                            claw = min(izfull[kk], dij)
                             if claw >= farfilt && npsupp[k]
                                 push!(r, k)
                                 push!(z, farfilt)
@@ -207,47 +193,41 @@ function buildcomplex3(symmat::Matrix{Int}, maxsd::Int)
                                 npsupp[k] = false
                                 ff2pv[k] = i
                             else
-                                farfilt = min(claw,farfilt)
-                                if saveface(ct,kk,colsum,farfilt,oldclaw,rt,zt)
+                                farfilt = min(claw, farfilt)
+                                if saveface(ct, kk, colsum, farfilt, oldclaw, rt, zt)
                                     push!(r, k)
                                     push!(z, farfilt)
                                 end
                             end
                         end
                     end
-
-                    for k = fpi[j,j]:fpi[j+1,j]-1
-                        kk = jrv[k]
-                        if izfull[kk] > 0
-                            claw = min(izfull[kk],dij)
-                            if saveface(ct,kk,colsum,claw,oldclaw,rt,zt)
-                                push!(r, k)
-                                push!(z, claw)
-                            end
-                        end
-                    end
-
-                    for k = fpi[j+1,j]:jcp[j+1]-1
-                        kk = jrv[k]
-                        if izfull[kk] > 0
-                            farfilt = jz[k]
-                            claw = min(izfull[kk],dij)
-                            if claw >= farfilt && npsupp[k]
-                                push!(r, k)
-                                push!(z, farfilt)
-                                numpairs += 1
-                                pflist[numpairs] = length(r)
-                                npsupp[k] = false
-                                ff2pv[k] = i
-                            else
-                                farfilt = min(claw,farfilt)
-                                if saveface(ct,kk,colsum,farfilt,oldclaw,rt,zt)
-                                    push!(r, k)
-                                    push!(z, farfilt)
-                                end
-                            end
-                        end
-                    end
+                    
+                    k = fpi[j,j]:fpi[j+1,j]-1
+                    kk = jrv[k]
+                    if1 = izfull[kk] .> 0
+                    k = k[if1]
+                    kk = kk[if1]
+                    claw = min.(izfull[kk], dij)
+                    if2 = saveface.(Ref(ct), kk, Ref(colsum), claw, Ref(oldclaw), Ref(rt), Ref(zt))
+                    append!(r, k[if2])
+                    append!(z, claw[if2])
+                    
+                    k = fpi[j+1,j]:jcp[j+1]-1
+                    kk = jrv[k]
+                    if1 = izfull[kk] .> 0
+                    k = k[if1]
+                    kk = kk[if1]
+                    farfilt = jz[k]
+                    claw = min.(izfull[kk], dij)
+                    if2 = (claw .>= farfilt) .& npsupp[k]
+                    farfilt[.!if2] .= min.(claw[.!if2], farfilt[.!if2])
+                    if3 = saveface.(Ref(ct), kk, Ref(colsum), farfilt, Ref(oldclaw), Ref(rt), Ref(zt))
+                    pflist[numpairs .+ (1:sum(if2))] .= length(r) .+ cumsum(if2 .| if3)[if2];
+                    numpairs += sum(if2)
+                    append!(r, k[if2 .| if3])
+                    append!(z, farfilt[if2 .| if3])
+                    npsupp[k[if2]] .= false
+                    ff2pv[k[if2]] .= i
                 end
             end
             # update the column pattern and the total number of nonzeros
@@ -278,9 +258,9 @@ function buildcomplex3(symmat::Matrix{Int}, maxsd::Int)
 end
 
 
-function saveface(ct::Vector{Int},kk::Int,colsum::Vector{Int},farfilt::Int,oldclaw::Vector{Int},rt::Vector{Int},zt::Vector{Int})
+function saveface(ct::Vector{Int},kk::Int,colsum::Vector{Int},farfilt::Int,oldclaw::Vector{Int},rt::Vector{Int},zt::Vector{Int})::Bool
     for l = ct[kk]:colsum[kk]
-        if zt[l] >= farfilt && oldclaw[rt[l]] >= farfilt
+        if (zt[l] >= farfilt) && (oldclaw[rt[l]] >= farfilt)
             return false
         end
     end
