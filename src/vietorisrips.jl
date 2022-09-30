@@ -160,47 +160,37 @@ function buildcomplex3(symmat::Matrix{Int}, maxsd::Int)
                             end
                         end
                     end
+                    
+                    k = fpi[i,j]:fpi[i+1,j]-1
+                    kk = jrv[k]
+                    farfilt = jz[k]
+                    claw = min.(izfull[kk], dij)
+                    if2 = (dij .>= farfilt) .& npsupp[k]
+                    farfilt[.!if2] .= min.(claw[.!if2], farfilt[.!if2])
+                    if3 = saveface.(Ref(ct), kk, Ref(colsum), farfilt, Ref(oldclaw), Ref(rt), Ref(zt))
+                    pflist[numpairs .+ (1:sum(if2))] .= length(r) .+ cumsum(if2 .| if3)[if2];
+                    numpairs += sum(if2)
+                    append!(r, k[if2 .| if3])
+                    append!(z, farfilt[if2 .| if3])
+                    npsupp[k[if2]] .= false
+                    ff2pv[k[if2]] .= i
                 
-                    for k = fpi[i,j]:fpi[i+1,j]-1
-                        kk = jrv[k]
-                        farfilt = jz[k]
-                        if dij >= farfilt && npsupp[k]
-                            push!(r, k)
-                            push!(z, farfilt)
-                            numpairs += 1
-                            pflist[numpairs] = length(r)
-                            npsupp[k] = false
-                            ff2pv[k] = i
-                        else
-                            farfilt = min(dij, farfilt)
-                            if saveface(ct, kk, colsum, farfilt, oldclaw, rt, zt)
-                                push!(r, k)
-                                push!(z, farfilt)
-                            end
-                        end
-                    end
-                
-                    for k = fpi[i+1, j]:fpi[j,j]-1
-                        kk = jrv[k]
-                        if izfull[kk] > 0
-                            farfilt = jz[k]
-                            claw = min(izfull[kk], dij)
-                            if claw >= farfilt && npsupp[k]
-                                push!(r, k)
-                                push!(z, farfilt)
-                                numpairs += 1
-                                pflist[numpairs] = length(r)
-                                npsupp[k] = false
-                                ff2pv[k] = i
-                            else
-                                farfilt = min(claw, farfilt)
-                                if saveface(ct, kk, colsum, farfilt, oldclaw, rt, zt)
-                                    push!(r, k)
-                                    push!(z, farfilt)
-                                end
-                            end
-                        end
-                    end
+                    k = fpi[i+1,j]:fpi[j,j]-1
+                    kk = jrv[k]
+                    if1 = izfull[kk] .> 0
+                    k = k[if1]
+                    kk = kk[if1]
+                    farfilt = jz[k]
+                    claw = min.(izfull[kk], dij)
+                    if2 = (claw .>= farfilt) .& npsupp[k]
+                    farfilt[.!if2] .= min.(claw[.!if2], farfilt[.!if2])
+                    if3 = saveface.(Ref(ct), kk, Ref(colsum), farfilt, Ref(oldclaw), Ref(rt), Ref(zt))
+                    pflist[numpairs .+ (1:sum(if2))] .= length(r) .+ cumsum(if2 .| if3)[if2];
+                    numpairs += sum(if2)
+                    append!(r, k[if2 .| if3])
+                    append!(z, farfilt[if2 .| if3])
+                    npsupp[k[if2]] .= false
+                    ff2pv[k[if2]] .= i
                     
                     k = fpi[j,j]:fpi[j+1,j]-1
                     kk = jrv[k]
@@ -211,7 +201,7 @@ function buildcomplex3(symmat::Matrix{Int}, maxsd::Int)
                     if2 = saveface.(Ref(ct), kk, Ref(colsum), claw, Ref(oldclaw), Ref(rt), Ref(zt))
                     append!(r, k[if2])
                     append!(z, claw[if2])
-                    
+                
                     k = fpi[j+1,j]:jcp[j+1]-1
                     kk = jrv[k]
                     if1 = izfull[kk] .> 0
