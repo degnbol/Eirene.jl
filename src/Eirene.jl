@@ -158,24 +158,25 @@ end;
 
 
 using CSV, DataFrames
-using .Threads: @threads
-using Profile
+using JSON
 
-fnames = readdir(expanduser("~/protTDA/data/GASS/xyzChain"); join=true);
-dfs = CSV.read.(fnames, DataFrame; types=Dict(:x=>Float64, :y=>Float64, :z=>Float64));
-xyzs = [Matrix{Float64}(df[!, [:x, :y, :z]]) for df in dfs];
+name = "1a16_A"
+original = JSON.parsefile(expanduser("~/protTDA/data/GASS/PHH2/$name.json"))
+obs1 = hcat(original["barcode"]...)
+obs2 = hcat(original["barcode_2"]...)
+ors1 = reduce.(hcat, original["representatives"]) |> Vector{Matrix{Int}}
+ors2 = reduce.(hcat, original["representatives_2"]) |> Vector{Matrix{Int}}
 
-@time for xyz in xyzs[7:8]
-    println("file")
-    @time Eirene.eirene(xyz, 2; minrad=0.);
-end
+df = CSV.read(expanduser("~/protTDA/data/GASS/xyzChain/$name.tsv"), DataFrame; types=Dict(:x=>Float64, :y=>Float64, :z=>Float64));
+xyz = Matrix{Float64}(df[!, [:x, :y, :z]]);
 
-# @threads for (fname, xyz) in zip(basename.(fnames), xyzs[1:4]) |> collect
-#     @time bs, rs = Eirene.eirene(xyz, 2; minrad=0.)
-#  
-#     open("lars/$fname", "w") do io
-#         obj = Dict("H$i" => (barcode=b, representatives=r) for (i,(b,r)) ∈ enumerate(zip(bs, rs)))
-#         JSON.print(io, obj)
-#     end
-# end
+bs, rs = Eirene.eirene(xyz, 2; minrad=0.);
+
+all(bs[1] .≈ obs1)
+all(bs[2] .≈ obs2)
+all(rs[1] .== ors1)
+all(rs[2] .== ors2)
+
+
+
 

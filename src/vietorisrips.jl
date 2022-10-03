@@ -267,9 +267,9 @@ function buildcomplex3(symmat::Matrix{Int}, maxsd::Int)
         if isempty(farfaces[sd])
             for nextcard = sd+1:maxsd
                 firstv[nextcard] = [1;1]
-                farfaces[nextcard] = Array{Int}(undef,0)
-                prepairs[nextcard] = Array{Int}(undef,0)
-                grain[nextcard] = Array{Int}(undef,0)
+                farfaces[nextcard] = Int[]
+                prepairs[nextcard] = Int[]
+                grain[nextcard] = Int[]
             end
             break
         end
