@@ -85,7 +85,7 @@ function buildcomplex3(symmat::Matrix{Int}, maxsd::Int)
             fpi[1,1:m] = jcp[1:m]
             for p = 1:m
                 for q = 1:m
-                    fpi[q+1,p] = fpi[q,p]+pmhist[q,p]
+                    fpi[q+1, p] = fpi[q,p] + pmhist[q, p]
                 end
             end
 
@@ -99,12 +99,13 @@ function buildcomplex3(symmat::Matrix{Int}, maxsd::Int)
         
         for i = 1:m
             fill!(izfull, 0)
-            lrange = cran(jcp, i)
-            izfull[jrv[lrange]] = jz[lrange]
+            izfull[jrv[cran(jcp, i)]] = jz[cran(jcp, i)]
 
             for j = i+1:m
                 dij = symmat[j,i]
                 dij == 0 && continue
+                claw = min.(izfull, dij)
+                
                 if sd <= maxsd - 1
                     k = cran(jcp, j)
                     kk = jrv[k]
@@ -112,10 +113,9 @@ function buildcomplex3(symmat::Matrix{Int}, maxsd::Int)
                     k = k[if1]
                     kk = kk[if1]
                     farfilt = jz[k]
-                    claw = min.(izfull[kk], dij)
                     append!(r, k)
-                    append!(z, min.(farfilt, claw))
-                    if2 = (claw .>= farfilt) .& npsupp[k]
+                    append!(z, min.(farfilt, claw[kk]))
+                    if2 = (claw[kk] .>= farfilt) .& npsupp[k]
                     pflist[numpairs .+ (1:sum(if2))] .= (length(r)-length(k)+1:length(r))[if2]
                     npsupp[k[if2]] .= false
                     numpairs += sum(if2)
@@ -125,19 +125,17 @@ function buildcomplex3(symmat::Matrix{Int}, maxsd::Int)
                     end
                 else
                     oldclaw[1:i-1] = minimum(symmat[1:i-1, [i, j]]; dims=2)
+                    
                     for l = 1:i-1
                         if fpi[l, j] < fpi[l+1, j]
                             ocl = oldclaw[l]
                             if ocl < dij
                                 for k = fpi[l, j]:fpi[l+1, j]-1
-                                    ## may have to reindex this
                                     kk = jrv[k]
                                     farfilt = jz[k]
-                                    if zll[kk] <= ocl
-                                        break
-                                    elseif oldclaw[l] < min(farfilt, izfull[kk])
-                                        claw = min(izfull[kk], dij)
-                                        if claw >= farfilt
+                                    zll[kk] <= ocl && break
+                                    if oldclaw[l] < min(farfilt, izfull[kk])
+                                        if claw[kk] >= farfilt
                                             if npsupp[k]
                                                 push!(r, k)
                                                 push!(z, farfilt)
@@ -151,22 +149,54 @@ function buildcomplex3(symmat::Matrix{Int}, maxsd::Int)
                                                 push!(r, k)
                                                 push!(z, farfilt)
                                             end
-                                        elseif (claw > 0) && saveface(ct, kk, colsum, claw, oldclaw, rt, zt)
+                                        elseif (claw[kk] > 0) && saveface(ct, kk, colsum, claw[kk], oldclaw, rt, zt)
                                             push!(r, k)
-                                            push!(z, claw)
+                                            push!(z, claw[kk])
                                         end
                                     end
                                 end
                             end
                         end
                     end
+                    # l = 1:i-1
+                    # if1 = fpi[l,j] .< fpi[l+1,j]
+                    # l = l[if1]
+                    # ocl = oldclaw[l]
+                    # if2 = ocl .< dij
+                    # l = l[if2]
+                    # ocl = ocl[if2]
+                    # k = fpi[l,j]:fpi[l+1,j]-1
+                    # if2 = 1:findfirstdefault(zll[jrv[k]] .<= ocl, length(k)+1)-1
+                    # k = k[if2]
+                    # kk = jrv[k]
+                    # farfilt = jz[k]
+                    # if3 = oldclaw[l] < min(farfilt, izfull[kk])
+                    # k = k[if3]
+                    # kk = kk[if3]
+                    # if4 = claw[kk] .>= farfilt
+                    #     if npsupp[k]
+                    #         push!(r, k)
+                    #         push!(z, farfilt)
+                    #         numpairs += 1
+                    #         pflist[numpairs] = length(r)
+                    #         npsupp[k] = false
+                    #         ff2pv[k] = i
+                    #     elseif oldclaw[ff2pv[k]] >= farfilt
+                    #         continue
+                    #     elseif saveface(ct, kk, colsum, farfilt, oldclaw, rt, zt)
+                    #         push!(r, k)
+                    #         push!(z, farfilt)
+                    #     end
+                    # elseif (claw[kk] > 0) && saveface(ct, kk, colsum, claw[kk], oldclaw, rt, zt)
+                    #     push!(r, k)
+                    #     push!(z, claw[kk])
+                    # end
                     
                     k = fpi[i,j]:fpi[i+1,j]-1
                     kk = jrv[k]
                     farfilt = jz[k]
-                    claw = min.(izfull[kk], dij)
                     if2 = (dij .>= farfilt) .& npsupp[k]
-                    farfilt[.!if2] .= min.(claw[.!if2], farfilt[.!if2])
+                    farfilt[.!if2] .= min.(claw[kk][.!if2], farfilt[.!if2])
                     if3 = saveface.(Ref(ct), kk, Ref(colsum), farfilt, Ref(oldclaw), Ref(rt), Ref(zt))
                     pflist[numpairs .+ (1:sum(if2))] .= length(r) .+ cumsum(if2 .| if3)[if2];
                     numpairs += sum(if2)
@@ -174,16 +204,15 @@ function buildcomplex3(symmat::Matrix{Int}, maxsd::Int)
                     append!(z, farfilt[if2 .| if3])
                     npsupp[k[if2]] .= false
                     ff2pv[k[if2]] .= i
-                
+                    
                     k = fpi[i+1,j]:fpi[j,j]-1
                     kk = jrv[k]
                     if1 = izfull[kk] .> 0
                     k = k[if1]
                     kk = kk[if1]
                     farfilt = jz[k]
-                    claw = min.(izfull[kk], dij)
-                    if2 = (claw .>= farfilt) .& npsupp[k]
-                    farfilt[.!if2] .= min.(claw[.!if2], farfilt[.!if2])
+                    if2 = (claw[kk] .>= farfilt) .& npsupp[k]
+                    farfilt[.!if2] .= min.(claw[kk][.!if2], farfilt[.!if2])
                     if3 = saveface.(Ref(ct), kk, Ref(colsum), farfilt, Ref(oldclaw), Ref(rt), Ref(zt))
                     pflist[numpairs .+ (1:sum(if2))] .= length(r) .+ cumsum(if2 .| if3)[if2];
                     numpairs += sum(if2)
@@ -197,10 +226,9 @@ function buildcomplex3(symmat::Matrix{Int}, maxsd::Int)
                     if1 = izfull[kk] .> 0
                     k = k[if1]
                     kk = kk[if1]
-                    claw = min.(izfull[kk], dij)
-                    if2 = saveface.(Ref(ct), kk, Ref(colsum), claw, Ref(oldclaw), Ref(rt), Ref(zt))
+                    if2 = saveface.(Ref(ct), kk, Ref(colsum), claw[kk], Ref(oldclaw), Ref(rt), Ref(zt))
                     append!(r, k[if2])
-                    append!(z, claw[if2])
+                    append!(z, claw[kk][if2])
                 
                     k = fpi[j+1,j]:jcp[j+1]-1
                     kk = jrv[k]
@@ -208,9 +236,8 @@ function buildcomplex3(symmat::Matrix{Int}, maxsd::Int)
                     k = k[if1]
                     kk = kk[if1]
                     farfilt = jz[k]
-                    claw = min.(izfull[kk], dij)
-                    if2 = (claw .>= farfilt) .& npsupp[k]
-                    farfilt[.!if2] .= min.(claw[.!if2], farfilt[.!if2])
+                    if2 = (claw[kk] .>= farfilt) .& npsupp[k]
+                    farfilt[.!if2] .= min.(claw[kk][.!if2], farfilt[.!if2])
                     if3 = saveface.(Ref(ct), kk, Ref(colsum), farfilt, Ref(oldclaw), Ref(rt), Ref(zt))
                     pflist[numpairs .+ (1:sum(if2))] .= length(r) .+ cumsum(if2 .| if3)[if2];
                     numpairs += sum(if2)
@@ -234,13 +261,12 @@ function buildcomplex3(symmat::Matrix{Int}, maxsd::Int)
         farfaces[sd] = r
         prepairs[sd] = pflist
         grain[sd] = z
+        # if nothing is found, the remaining homology groups are trivial
         if isempty(farfaces[sd])
-            for nextcard = sd+1:maxsd
-                firstv[nextcard] = [1;1]
-                farfaces[nextcard] = Array{Int}(undef,0)
-                prepairs[nextcard] = Array{Int}(undef,0)
-                grain[nextcard] = Array{Int}(undef,0)
-            end
+            firstv[sd+1:maxsd] .= [1;1]
+            farfaces[sd+1:maxsd] .= Int[]
+            prepairs[sd+1:maxsd] .= Int[]
+            grain[sd+1:maxsd] .= Int[]
             break
         end
     end
@@ -266,8 +292,8 @@ function generate2faces(symmat::Matrix{Int})
     marker = 0
     colptr[1] = 1
     for i = 1:m
-        colptr[i+1]=colptr[i]
-        for j = (i+1):m
+        colptr[i+1] = colptr[i]
+        for j = i+1:m
             if symmat[j,i] > 0
                 colptr[i+1] += 1
                 rowval[colptr[i+1]-1] = j
@@ -275,7 +301,7 @@ function generate2faces(symmat::Matrix{Int})
             end
         end
     end
-    rowval,colptr,nzval
+    rowval, colptr, nzval
 end
 
 function generate3faces!(farfaces_cell, firstv_cell, grain_cell, prepairs_cell, m, symmat)
@@ -465,4 +491,8 @@ function generate3faces!(farfaces_cell, firstv_cell, grain_cell, prepairs_cell, 
 
     return r,fv3,z,prepairs,numpairs
 end
+
+findfirstdefault(v::Vector{Int}, default::Int) = _default(findfirst(v), default)
+_default(::Nothing, default::Int) = default
+_default(x::Int, default::Int) = x
 
