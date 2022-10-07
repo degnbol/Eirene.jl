@@ -157,25 +157,3 @@ eirene(rand(400, 3), 2; minrad=0)
 end;
 
 
-using CSV, DataFrames
-using .Threads: @threads
-using Profile
-
-fnames = readdir(expanduser("~/protTDA/data/GASS/xyzChain"); join=true);
-dfs = CSV.read.(fnames, DataFrame; types=Dict(:x=>Float64, :y=>Float64, :z=>Float64));
-xyzs = [Matrix{Float64}(df[!, [:x, :y, :z]]) for df in dfs];
-
-@time for xyz in xyzs[7:8]
-    println("file")
-    @time Eirene.eirene(xyz, 2; minrad=0.);
-end
-
-# @threads for (fname, xyz) in zip(basename.(fnames), xyzs[1:4]) |> collect
-#     @time bs, rs = Eirene.eirene(xyz, 2; minrad=0.)
-#  
-#     open("lars/$fname", "w") do io
-#         obj = Dict("H$i" => (barcode=b, representatives=r) for (i,(b,r)) ∈ enumerate(zip(bs, rs)))
-#         JSON.print(io, obj)
-#     end
-# end
-
